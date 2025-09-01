@@ -1,8 +1,16 @@
 const Database = require('better-sqlite3');
 const path = require('path');
+const fs = require('fs');
 const bcrypt = require('bcryptjs');
 
-const dbPath = path.join(__dirname, '../data/warehouse.db');
+// 确保数据目录存在
+const dataDir = path.join(__dirname, '../data');
+if (!fs.existsSync(dataDir)) {
+    fs.mkdirSync(dataDir, { recursive: true });
+    console.log('已创建数据目录:', dataDir);
+}
+
+const dbPath = path.join(dataDir, 'warehouse.db');
 const db = new Database(dbPath);
 
 // 初始化表结构
@@ -219,7 +227,7 @@ function saveSchedule(scheduleData) {
   `);
   const info = stmt.run(
     scheduleData.name,
-    scheduleData.cronExpression,
+    scheduleData.cron,
     scheduleData.configId,
     scheduleData.userId,
     scheduleData.isActive ? 1 : 0,
@@ -242,7 +250,7 @@ function updateSchedule(id, updateData) {
   `);
   stmt.run(
     updateData.name || schedule.name,
-    updateData.cronExpression || schedule.cron,
+    updateData.cron|| schedule.cron,
     updateData.isActive !== undefined ? (updateData.isActive ? 1 : 0) : schedule.isActive,
     id
   );

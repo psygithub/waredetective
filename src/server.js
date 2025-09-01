@@ -4,7 +4,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
 const path = require('path');
-const cron = require('node-cron');
+const cronSvc = require('node-cron');
 
 // const database = require('./database');
 const database = require('./db_sqlite');
@@ -431,15 +431,15 @@ class WebServer {
       auth.authenticateToken.bind(auth),
       (req, res) => {
         try {
-          const { name, cronExpression, configId, isActive = true } = req.body;
-
-          if (!cron.validate(cronExpression)) {
+          const { name, cron, configId, isActive = true } = req.body;
+          console.log("save cron :" + JSON.stringify(req.body));
+          if (!cronSvc.validate(cron)) {
             return res.status(400).json({ error: '无效的cron表达式' });
           }
 
           const scheduleData = {
             name,
-            cronExpression,
+            cron,
             configId,
             userId: req.user.id,
             isActive
@@ -457,7 +457,21 @@ class WebServer {
         }
       }
     );
-
+    // 获取配置详情
+    this.app.get('/api/schedules/:id',
+      auth.authenticateToken.bind(auth),
+      (req, res) => {
+        try {
+          const schedule = database.getScheduleById(parseInt(req.params.id));
+          if (!schedule) {
+            return res.status(404).json({ error: '定时任务不存在' });
+          }
+          res.json(schedule);
+        } catch (error) {
+          res.status(500).json({ error: error.message });
+        }
+      }
+    );
     // 获取定时任务列表
     this.app.get('/api/schedules',
       auth.authenticateToken.bind(auth),
@@ -479,7 +493,7 @@ class WebServer {
           const scheduleId = parseInt(req.params.id);
           const updateData = req.body;
 
-          if (updateData.cronExpression && !cron.validate(updateData.cronExpression)) {
+          if (updateData.cron && !cronSvc.validate(updateData.cron)) {
             return res.status(400).json({ error: '无效的cron表达式' });
           }
 
@@ -599,14 +613,14 @@ class WebServer {
     }
 
     // 确保使用正确的 cron 表达式字段
-    const cronExpression = schedule.cronExpression || schedule.cron;
+    const cronExpression =  schedule.cron;
     
-    if (!cron.validate(cronExpression)) {
+    if (!cronSvc.validate(cronExpression)) {
         console.error(`无效的cron表达式: ${cronExpression} (任务ID: ${schedule.id})`);
         return;
     }
 
-    const task = cron.schedule(cronExpression, async () => {
+    const task = cronSvc.schedule(cronExpression, async () => {
         // 检查全局任务状态，避免并发执行
         if (this.isGlobalTaskRunning) {
             console.log(`任务 ${schedule.name} 等待中，已有任务正在执行`);
