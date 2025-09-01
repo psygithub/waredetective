@@ -357,50 +357,50 @@
     </div>
 
     <!-- 定时任务模态框 -->
-    <div class="modal fade" id="scheduleModal" tabindex="-1">
-        <div class="modal-dialog">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h5 class="modal-title">定时任务管理</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                </div>
-                <div class="modal-body">
-                    <form id="scheduleForm">
-                        <input type="hidden" id="scheduleId">
-                        <div class="mb-3">
-                            <label class="form-label">任务名称</label>
-                            <input type="text" class="form-control" id="scheduleName" required>
+<div class="modal fade" id="scheduleModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">定时任务管理</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <input type="hidden" id="scheduleId">
+                    <div class="mb-3">
+                        <label class="form-label">任务名称</label>
+                        <input type="text" class="form-control" id="scheduleName" required>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">选择配置</label>
+                        <select class="form-select" id="scheduleConfigId" required>
+                            <option value="">选择配置...</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Cron表达式</label>
+                        <input type="text" class="form-control" id="scheduleCron" placeholder="0 0 * * *" required>
+                        <div class="form-text">
+                            示例: 0 0 * * * (每天午夜), 0 */6 * * * (每6小时)
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">选择配置</label>
-                            <select class="form-select" id="scheduleConfigId" required>
-                                <option value="">选择配置...</option>
-                            </select>
+                    </div>
+                    <div class="mb-3">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="scheduleActive" checked>
+                            <label class="form-check-label" for="scheduleActive">
+                                启用任务
+                            </label>
                         </div>
-                        <div class="mb-3">
-                            <label class="form-label">Cron表达式</label>
-                            <input type="text" class="form-control" id="scheduleCron" placeholder="0 0 * * *" required>
-                            <div class="form-text">
-                                示例: 0 0 * * * (每天午夜), 0 */6 * * * (每6小时)
-                            </div>
-                        </div>
-                        <div class="mb-3">
-                            <div class="form-check">
-                                <input class="form-check-input" type="checkbox" id="scheduleActive" checked>
-                                <label class="form-check-label" for="scheduleActive">
-                                    启用任务
-                                </label>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-                <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
-                    <button type="button" class="btn btn-primary" onclick="saveSchedule()">保存</button>
-                </div>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+                <button type="button" class="btn btn-primary" onclick="saveSchedule()">保存</button>
             </div>
         </div>
     </div>
+</div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="admin.js"></script>

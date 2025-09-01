@@ -113,6 +113,7 @@ class WarehouseDetective {
 
   // 发送邮件（截取整个结果弹窗）
   async sendEmailWithScreenshot(results, skus, regions) {
+    let txtAttachmentPath = null;
     try {
       const date = new Date().toLocaleString('zh-CN');
       const subject = `库存检测结果 - ${date}`;
@@ -125,8 +126,79 @@ class WarehouseDetective {
       ).length;
       const outOfStockCount = results.length - inStockCount;
 
+      // 创建文本文件附件
+      txtAttachmentPath = await this.createTextFile(results, skus, regions, date);
       // 美化邮件内容
-      let htmlContent = `
+      let htmlContent = this.createHtml(results, skus, regions,date,inStockCount, outOfStockCount);
+
+      const toList = this.config.email?.to || [];
+      if (toList.length === 0) {
+        console.log('未配置收件人邮箱，跳过发送邮件');
+        return;
+      }
+
+      const validEmails = toList.filter(email => email && email.includes('@'));
+      if (validEmails.length === 0) {
+        console.log('没有有效的收件人邮箱，跳过发送邮件');
+        return;
+      }
+
+
+      // ====== 发邮件 ======
+      const mailOptions = {
+        from: this.config.email?.from,
+        to: validEmails.join(','),
+        subject,
+        html: htmlContent,
+        attachments: [
+        {
+          filename: `库存检测结果-${date.replace(/[/:\\]/g, '-')}.txt`,
+          path: txtAttachmentPath
+        }
+      ]
+      };
+
+      await this.mailTransporter.sendMail(mailOptions);
+      console.log('邮件发送成功');
+
+    } catch (error) {
+      console.error('发送邮件失败:', error);
+    }
+  }
+
+  // 创建文本文件附件
+async createTextFile(results, skus, regions, date) {
+  const tempDir = path.join(__dirname, '../temp');
+  
+  // 确保临时目录存在
+  if (!fs.existsSync(tempDir)) {
+    fs.mkdirSync(tempDir, { recursive: true });
+  }
+  
+  const filePath = path.join(tempDir, `inventory-result-${Date.now()}.txt`);
+  
+  let content = `库存检测结果报告\n`;
+  content += `检测时间: ${date}\n`;
+  content += `检测SKU数量: ${skus.length}\n`;
+  content += `检测地区数量: ${regions.length}\n`;
+  content += `总结果数量: ${results.length}\n\n`;
+  
+  content += `详细结果:\n`;
+  content += `SKU\t地区\t库存状态\n`;
+  content += `----------------------------------------\n`;
+  
+  for (const item of results) {
+    content += `${item.sku}\t${item.region}\t${item.stock}\n`;
+  }
+  
+  fs.writeFileSync(filePath, content, 'utf8');
+  console.log('文本附件已创建:', filePath);
+  
+  return filePath;
+}
+
+  createHtml(results, skus, regions,date,inStockCount,outOfStockCount) {
+    let htmlContent = `
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -285,23 +357,23 @@ class WarehouseDetective {
       </thead>
       <tbody>
 `;
-      // 添加每个结果的表格行
-      for (const item of results) {
-        const stockClass = item.stock.includes('未找到') ||
-          item.stock.includes('无库存') ||
-          item.stock.trim() === '' ?
-          'stock-unavailable' : 'stock-available';
+    // 添加每个结果的表格行
+    for (const item of results) {
+      const stockClass = item.stock.includes('未找到') ||
+        item.stock.includes('无库存') ||
+        item.stock.trim() === '' ?
+        'stock-unavailable' : 'stock-available';
 
-        htmlContent += `
+      htmlContent += `
             <tr>
               <td>${item.sku}</td>
               <td>${item.region}</td>
               <td class="${stockClass}">${item.stock}</td>
             </tr>
       `;
-      }
+    }
 
-      htmlContent += `
+    htmlContent += `
           </tbody>
         </table>
         <div class="footer">
@@ -311,36 +383,8 @@ class WarehouseDetective {
     </body>
     </html>
     `;
-
-      const toList = this.config.email?.to || [];
-      if (toList.length === 0) {
-        console.log('未配置收件人邮箱，跳过发送邮件');
-        return;
-      }
-
-      const validEmails = toList.filter(email => email && email.includes('@'));
-      if (validEmails.length === 0) {
-        console.log('没有有效的收件人邮箱，跳过发送邮件');
-        return;
-      }
-
-
-      // ====== 发邮件 ======
-      const mailOptions = {
-        from: this.config.email?.from,
-        to: validEmails.join(','),
-        subject,
-        html: htmlContent
-      };
-
-      await this.mailTransporter.sendMail(mailOptions);
-      console.log('邮件发送成功');
-
-    } catch (error) {
-      console.error('发送邮件失败:', error);
-    }
+    return htmlContent;
   }
-
 
   async login() {
     console.log('正在登录...');
@@ -395,7 +439,7 @@ class WarehouseDetective {
     try {
 
       // 发送邮件 - 修复：使用 results 而不是 this.results
-      await this.sendEmailWithScreenshot(results, skuList, regionList,);
+      await this.sendEmailWithScreenshot(results, skuList, regionList);
     } catch (error) {
       console.error('截图发送邮件过程中出错:', error);
       return results;
