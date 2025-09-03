@@ -11,6 +11,14 @@ class WarehouseDetective {
     this.page = null;
     this.results = [];
     this.mailTransporter = this.createMailTransporter();
+    this.authToken = null; // 添加认证token缓存
+    this.authCookies = null; // 添加cookies缓存
+    this.lastLoginTime = null; // 最后登录时间
+    // 修复：确保 serverBaseUrl 有默认值
+    this.serverBaseUrl = process.env.SERVER_URL || 'http://localhost:3000';
+
+    // 添加调试信息
+    console.log('服务器基础URL:', this.serverBaseUrl);
   }
 
   loadConfig() {
@@ -28,6 +36,31 @@ class WarehouseDetective {
     // await this.page.setViewportSize(this.config.browser.viewport);
   }
 
+  // 添加获取认证信息的方法
+  async getAuthInfo() {
+    // 如果有有效的token/cookies，直接返回
+    if (this.isAuthValid()) {
+      return {
+        cookies: this.authCookies,
+        token: this.authToken
+      };
+    }
+
+    // 否则重新登录
+    await this.login();
+    await this.page.waitForTimeout(3000); // 等待登录完成
+
+    // 获取新的认证信息
+    this.authCookies = await this.page.context().cookies();
+    this.authToken = await this.getAuthTokenFromStorage();
+    this.lastLoginTime = Date.now();
+
+    return {
+      cookies: this.authCookies,
+      token: this.authToken
+    };
+  }
+
 
   // 创建邮件传输器
   createMailTransporter() {
@@ -42,77 +75,76 @@ class WarehouseDetective {
     });
   }
 
+  // 检查认证是否有效（假设1小时内有效）
+  isAuthValid() {
+    if (!this.lastLoginTime) return false;
+    const oneHour = 60 * 60 * 1000;
+    return (Date.now() - this.lastLoginTime) < oneHour;
+  }
 
-  // 发送邮件（截取整个结果弹窗）
-  async sendEmailWithScreenshot_origin(results, skus, regions) {
+  // 从storage获取token
+  async getAuthTokenFromStorage() {
     try {
-      const date = new Date().toLocaleString('zh-CN');
-      const subject = `库存检测结果 - ${date}`;
-
-      let htmlContent = `
-      <h2>库存检测结果</h2>
-      <p>检测时间: ${date}</p>
-      <p>检测SKU数量: ${skus.length}</p>
-      <p>检测地区数量: ${regions.length}</p>
-      <p>总结果数量: ${results.length}</p>
-    `;
-      let resultsTable = "";
-      for (const item of results) {
-        resultsTable += `<p>${item.sku}  ${item.region}  ${item.stock}</p>`;
-      }
-      htmlContent += resultsTable;
-
-      const toList = this.config.email?.to || [];
-      if (toList.length === 0) {
-        console.log('未配置收件人邮箱，跳过发送邮件');
-        return;
-      }
-
-      const validEmails = toList.filter(email => email && email.includes('@'));
-      if (validEmails.length === 0) {
-        console.log('没有有效的收件人邮箱，跳过发送邮件');
-        return;
-      }
-
-
-      // ====== 发邮件 ======
-      // const mailOptions = {
-      //   from: this.config.email?.from,
-      //   to: validEmails.join(','),
-      //   subject,
-      //   html: htmlContent,
-      //   attachments: [
-      //     {
-      //       filename: `inventory-result-${Date.now()}.png`,
-      //       path: screenshotPath,
-      //       cid: 'screenshot'
-      //     }
-      //   ]
-      // };
-
-      const mailOptions = {
-        from: this.config.email?.from,
-        to: validEmails.join(','),
-        subject,
-        html: htmlContent
-      };
-
-      await this.mailTransporter.sendMail(mailOptions);
-      console.log('邮件发送成功');
-
-      // 删除临时截图文件
-      try {
-        fs.unlinkSync(screenshotPath);
-      } catch (unlinkError) {
-        console.warn('删除临时文件失败:', unlinkError.message);
-      }
+      return await this.page.evaluate(() => {
+        return localStorage.getItem('auth_token') ||
+          localStorage.getItem('token') ||
+          sessionStorage.getItem('auth_token') ||
+          document.cookie.match(/(^|;)token=([^;]+)/)?.[2];
+      });
     } catch (error) {
-      console.error('发送邮件失败:', error);
+      console.error('获取认证token失败:', error);
+      return null;
     }
   }
 
+  // 清空认证缓存
+  clearAuthCache() {
+    this.authToken = null;
+    this.authCookies = null;
+    this.lastLoginTime = null;
+  }
+
+
+
+  async login() {
+    console.log('正在登录...');
+    try {
+      await this.page.goto(this.config.website.loginUrl, {
+        waitUntil: 'networkidle',
+        timeout: this.config.browser.timeout
+      });
+
+      // 等待页面加载完成
+      await this.page.waitForTimeout(2000);
+      console.log('打开页面...');
+      await this.page.locator('#layout-header i').nth(3).click();
+      await this.page.getByText('手机登录').click();
+      await this.page.getByRole('textbox', { name: '请输入手机号' }).click();
+      await this.page.getByText('密码登录').click();
+      await this.page.getByRole('textbox', { name: '请输入手机号' }).click();
+      await this.page.getByRole('textbox', { name: '请输入手机号' }).fill(this.config.website.username);
+      await this.page.getByRole('textbox', { name: '请输入密码' }).click();
+      await this.page.getByRole('textbox', { name: '请输入密码' }).fill(this.config.website.password);
+      console.log('点击同意...');
+      await this.page.locator('label span').nth(1).click();
+      await this.page.getByText('登录/注册').click();
+      this.lastLoginTime = Date.now();
+      return true;
+    } catch (error) {
+      console.error('登录过程中出错:', error);
+      this.clearAuthCache(); // 登录失败时清空缓存
+      return false;
+    }
+  }
+
+
   // 发送邮件（截取整个结果弹窗）
-  async sendEmailWithScreenshot(results, skus, regions) {
+  async sendEmailWithAttach(results, skus, regions, toEmail = this.config.email?.to || []) {
+    // 检查results是否为null或undefined
+    if (!results) {
+      console.log('没有结果数据，跳过发送邮件');
+      return;
+    }
     let txtAttachmentPath = null;
     try {
       const date = new Date().toLocaleString('zh-CN');
@@ -129,9 +161,11 @@ class WarehouseDetective {
       // 创建文本文件附件
       txtAttachmentPath = await this.createTextFile(results, skus, regions, date);
       // 美化邮件内容
-      let htmlContent = this.createHtml(results, skus, regions,date,inStockCount, outOfStockCount);
+      let htmlContent = this.createHtml(results, skus, regions, date, inStockCount, outOfStockCount);
 
-      const toList = this.config.email?.to || [];
+      // 确保 toEmail 是一个数组
+      let toList = Array.isArray(toEmail) ? toEmail : [toEmail];
+
       if (toList.length === 0) {
         console.log('未配置收件人邮箱，跳过发送邮件');
         return;
@@ -151,11 +185,11 @@ class WarehouseDetective {
         subject,
         html: htmlContent,
         attachments: [
-        {
-          filename: `库存检测结果-${date.replace(/[/:\\]/g, '-')}.txt`,
-          path: txtAttachmentPath
-        }
-      ]
+          {
+            filename: `库存检测结果-${date.replace(/[/:\\]/g, '-')}.txt`,
+            path: txtAttachmentPath
+          }
+        ]
       };
 
       await this.mailTransporter.sendMail(mailOptions);
@@ -167,37 +201,38 @@ class WarehouseDetective {
   }
 
   // 创建文本文件附件
-async createTextFile(results, skus, regions, date) {
-  const tempDir = path.join(__dirname, '../temp');
-  
-  // 确保临时目录存在
-  if (!fs.existsSync(tempDir)) {
-    fs.mkdirSync(tempDir, { recursive: true });
-  }
-  
-  const filePath = path.join(tempDir, `inventory-result-${Date.now()}.txt`);
-  
-  let content = `库存检测结果报告\n`;
-  content += `检测时间: ${date}\n`;
-  content += `检测SKU数量: ${skus.length}\n`;
-  content += `检测地区数量: ${regions.length}\n`;
-  content += `总结果数量: ${results.length}\n\n`;
-  
-  content += `详细结果:\n`;
-  content += `SKU\t地区\t库存状态\n`;
-  content += `----------------------------------------\n`;
-  
-  for (const item of results) {
-    content += `${item.sku}\t${item.region}\t${item.stock}\n`;
-  }
-  
-  fs.writeFileSync(filePath, content, 'utf8');
-  console.log('文本附件已创建:', filePath);
-  
-  return filePath;
-}
+  async createTextFile(results, skus, regions, date) {
+    const tempDir = path.join(__dirname, '../temp');
 
-  createHtml(results, skus, regions,date,inStockCount,outOfStockCount) {
+    // 确保临时目录存在
+    if (!fs.existsSync(tempDir)) {
+      fs.mkdirSync(tempDir, { recursive: true });
+    }
+
+    const filePath = path.join(tempDir, `inventory-result-${Date.now()}.txt`);
+
+    let content = `库存检测结果报告\n`;
+    content += `检测时间: ${date}\n`;
+    content += `检测SKU数量: ${skus.length}\n`;
+    content += `检测地区数量: ${regions.length}\n`;
+    content += `总结果数量: ${results.length}\n\n`;
+
+    content += `详细结果:\n`;
+    content += `SKU\t地区\t库存状态\n`;
+    content += `----------------------------------------\n`;
+
+    for (const item of results) {
+      content += `${item.sku}\t${item.region}\t${item.stock}\n`;
+    }
+
+    fs.writeFileSync(filePath, content, 'utf8');
+    console.log('文本附件已创建:', filePath);
+
+    return filePath;
+  }
+
+
+createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
     let htmlContent = `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -210,7 +245,7 @@ async createTextFile(results, skus, regions, date) {
       font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
       line-height: 1.6;
       color: #333;
-      max-width: 800px;
+      max-width: 1000px;
       margin: 0 auto;
       padding: 20px;
       background-color: #f9f9f9;
@@ -288,13 +323,41 @@ async createTextFile(results, skus, regions, date) {
     tr:hover {
       background-color: #f8f9fa;
     }
-    .stock-available {
-      color: #28a745;
-      font-weight: bold;
-    }
-    .stock-unavailable {
+    /* 根据库存状态设置不同样式 */
+    .stock-out-of-stock {
       color: #dc3545;
       font-weight: bold;
+      background-color: #fff5f5;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .stock-low {
+      color: #fd7e14;
+      font-weight: bold;
+      background-color: #fff9f0;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .stock-available {
+      color: #8c9e25ff;
+      font-weight: bold;
+      background-color: #f0fff4;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .stock-sufficient {
+      color: #006400;
+      font-weight: bold;
+      background-color: #e6ffe6;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+    .stock-unknown {
+      color: #6c757d;
+      font-weight: bold;
+      background-color: #f8f9fa;
+      padding: 4px 8px;
+      border-radius: 4px;
     }
     .footer {
       margin-top: 25px;
@@ -311,6 +374,9 @@ async createTextFile(results, skus, regions, date) {
       }
       table {
         font-size: 14px;
+      }
+      th, td {
+        padding: 8px 10px;
       }
     }
   </style>
@@ -359,10 +425,18 @@ async createTextFile(results, skus, regions, date) {
 `;
     // 添加每个结果的表格行
     for (const item of results) {
-      const stockClass = item.stock.includes('未找到') ||
-        item.stock.includes('无库存') ||
-        item.stock.trim() === '' ?
-        'stock-unavailable' : 'stock-available';
+      // 根据库存状态确定CSS类
+      let stockClass = 'stock-unknown';
+      
+      if (item.stock.includes('缺货') || item.stock.includes('无库存')) {
+        stockClass = 'stock-out-of-stock';
+      } else if (item.stock.includes('库存紧张')) {
+        stockClass = 'stock-low';
+      } else if (item.stock.includes('有货')) {
+        stockClass = 'stock-available';
+      } else if (item.stock.includes('库存充足')) {
+        stockClass = 'stock-sufficient';
+      }
 
       htmlContent += `
             <tr>
@@ -386,35 +460,6 @@ async createTextFile(results, skus, regions, date) {
     return htmlContent;
   }
 
-  async login() {
-    console.log('正在登录...');
-    try {
-      await this.page.goto(this.config.website.loginUrl, {
-        waitUntil: 'networkidle',
-        timeout: this.config.browser.timeout
-      });
-
-      // 等待页面加载完成
-      await this.page.waitForTimeout(2000);
-      console.log('打开页面...');
-      await this.page.locator('#layout-header i').nth(3).click();
-      await this.page.getByText('手机登录').click();
-      await this.page.getByRole('textbox', { name: '请输入手机号' }).click();
-      await this.page.getByText('密码登录').click();
-      await this.page.getByRole('textbox', { name: '请输入手机号' }).click();
-      await this.page.getByRole('textbox', { name: '请输入手机号' }).fill(this.config.website.username);
-      await this.page.getByRole('textbox', { name: '请输入密码' }).click();
-      await this.page.getByRole('textbox', { name: '请输入密码' }).fill(this.config.website.password);
-      console.log('点击同意...');
-      await this.page.locator('label span').nth(1).click();
-      await this.page.getByText('登录/注册').click();
-      return true;
-    } catch (error) {
-      console.error('登录过程中出错:', error);
-      return false;
-    }
-  }
-
   async searchSkuList(skuList, regionList) {
     const results = [];
 
@@ -435,19 +480,6 @@ async createTextFile(results, skus, regions, date) {
         await this.page.waitForTimeout(1000); // 添加延迟避免请求过快
       }
     }
-
-    try {
-
-      // 发送邮件 - 修复：使用 results 而不是 this.results
-      await this.sendEmailWithScreenshot(results, skuList, regionList);
-    } catch (error) {
-      console.error('截图发送邮件过程中出错:', error);
-      return results;
-
-    }
-
-
-
     return results;
   }
   async searchSKU(sku, region = '') {
@@ -640,6 +672,71 @@ async createTextFile(results, skus, regions, date) {
     fs.writeFileSync(outputPath, JSON.stringify(output, null, 2), 'utf8');
     console.log(`结果已保存到: ${outputPath}`);
   }
+  // 添加调用服务器API的方法
+  async callServerAPI(endpoint, method = 'GET', data = null) {
+    try {
+      const url = `${this.serverBaseUrl}${endpoint}`;
+      const options = {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await this.getAuthInfo()).token}` // 如果需要认证
+        }
+      };
+
+      if (data && method !== 'GET') {
+        options.body = JSON.stringify(data);
+      }
+
+      const response = await fetch(url, options);
+
+      if (!response.ok) {
+        throw new Error(`服务器请求失败: ${url} ${response.status} ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error('调用服务器API失败:', error);
+      throw error;
+    }
+  }
+  // 获取商品列表
+  async getProductList(regionId = '6', page = '1', pageSize = '10') {
+    try {
+      const endpoint = `/api/xizhiyue/products?regionId=${regionId}&page=${page}&pagesize=${pageSize}`;
+      const result = await this.callServerAPI(endpoint);
+      return result;
+    } catch (error) {
+      console.error('获取商品列表失败:', error);
+      throw error;
+    }
+  }
+
+  // 获取特定商品详情
+  async getProductDetail(productSkuId, regionId = '6') {
+    try {
+      const endpoint = `/api/xizhiyue/product/${productSkuId}?regionId=${regionId}`;
+      const result = await this.callServerAPI(endpoint);
+      return result;
+    } catch (error) {
+      console.error('获取商品详情失败:', error);
+      throw error;
+    }
+  }
+
+  // 搜索商品
+  async searchProducts(keyword, regionId = '6', page = '1') {
+    try {
+      const endpoint = `/api/xizhiyue/search?keyword=${encodeURIComponent(keyword)}&regionId=${regionId}&page=${page}`;
+      const result = await this.callServerAPI(endpoint);
+      return result;
+    } catch (error) {
+      console.error('搜索商品失败:', error);
+      throw error;
+    }
+  }
+
+
 
   //保存到sqlite
   async saveResultsToDb(userId, configId, skus, regions, results, status = 'completed', isScheduled = false, scheduleId = null) {
@@ -666,6 +763,77 @@ async createTextFile(results, skus, regions, date) {
   }
 
 
+// 将商品数据转换为邮件结果格式
+convertProductsToResults(products, targetRegionId = '6') {
+  const results = [];
+
+  for (const product of products) {
+    // 从delivery_regions获取目标地区的库存信息
+    let stockQuantity = 0;
+    let stockStatus = '未知';
+    
+    // 直接从产品对象获取库存数量
+    if (product.qty) {
+      stockQuantity = parseInt(product.qty) || 0;
+      stockStatus = this.determineStockStatus(stockQuantity);
+    }
+    
+    // 尝试从delivery_regions获取更精确的信息
+    if (product.delivery_regions && product.delivery_regions[targetRegionId]) {
+      const regionData = product.delivery_regions[targetRegionId][0];
+      if (regionData && regionData.qty) {
+        stockQuantity = parseInt(regionData.qty) || 0;
+        stockStatus = this.determineStockStatus(stockQuantity);
+      }
+    }
+
+    // 构建结果对象
+    const result = {
+      sku: product.product_sku,
+      region: targetRegionId.toString(),
+      stock: this.formatStockStatus(stockStatus, stockQuantity),
+      lastUpdated: new Date().toISOString(),
+      img: product.product_image || '',
+      url: this.generateProductUrl(product.product_sku_id),
+      product_name: product.product_name,
+      quantity: stockQuantity,
+      price: product.product_price || '未知'
+    };
+
+    results.push(result);
+  }
+
+  return results;
+}
+
+  // 格式化库存状态显示
+  formatStockStatus(status, quantity) {
+    const statusMap = {
+      '缺货': `无库存 (${quantity})`,
+      '库存紧张': `库存紧张 (${quantity})`,
+      '有货': `有货 (${quantity})`,
+      '库存充足': `库存充足 (${quantity})`,
+      '未知': `库存未知 (${quantity})`
+    };
+
+    return statusMap[status] || `库存状态: ${status} (${quantity})`;
+  }
+
+  // 生成商品URL（根据你的网站结构）
+  generateProductUrl(productSkuId) {
+    return `https://westmonth.com/product/${productSkuId}`;
+  }
+
+  // 判断库存状态（复用之前的方法）
+  determineStockStatus(quantity) {
+    if (!quantity || quantity === 0) return '缺货';
+    if (quantity > 0 && quantity <= 10) return '库存紧张';
+    if (quantity > 10 && quantity <= 100) return '有货';
+    if (quantity > 100) return '库存充足';
+    return '未知';
+  }
+
+
   async run(skus = [], regions = [], userId = null, configId = null, isScheduled = false, scheduleId = null) {
     try {
       await this.init();
@@ -686,59 +854,29 @@ async createTextFile(results, skus, regions, date) {
         return;
       }
 
-      console.log(`开始搜索 ${skuList.length} 个SKU...`);
-
-      for (const sku of skuList) {
-        if (regionList.length > 0) {
-          for (const region of regionList) {
-            const result = await this.searchSKU(sku, region);
-            if (result) {
-              this.results.push(...result);
-              console.log('已找到: ' + JSON.stringify(result));
-            }
-            await this.page.waitForTimeout(1000); // 避免请求过快
-          }
-        } else {
-          const result = await this.searchSKU(sku);
-          if (result) {
-            this.results.push(...result);
-          }
-          await this.page.waitForTimeout(1000);
-        }
+      // console.log(`开始搜索 ${skuList.length} 个SKU...`);
+      // const results = await detective.searchSkuList(skuList, regionList);
+      // 示例：获取商品列表
+      console.log('正在获取商品列表...');
+      const productList = await this.getProductList('6', '1', '20');
+      console.log('获取到商品数量:', productList.data.length);
+      console.log(JSON.stringify(productList));
+        let results = [];
+      if (productList && productList.data && productList.data.data && productList.data.data.length > 0) {
+        // 使用第一个地区ID，或者可以根据需要遍历所有地区
+        console.log('开始转换的商品结果');
+        const regionId = regionList.length > 0 ? regionList[0] : '6';
+        results = this.convertProductsToResults(productList.data.data, regionId);
+        console.log('转换的商品结果:', results);
       }
-
-      let screenshotPath = null;
-      // 保存截图
-      screenshotPath = path.join(__dirname, '../temp', `screenshot-${Date.now()}.png`);
-      // 确保临时目录存在
-      const tempDir = path.dirname(screenshotPath);
-      if (!fs.existsSync(tempDir)) {
-        fs.mkdirSync(tempDir, { recursive: true });
-      }
-
-
       // 发送邮件
-      await this.sendEmailWithScreenshot(this.results, skuList, regionList);
+      await this.sendEmailWithAttach(results, skuList, regionList, "nephilo@live.cn");
 
-
-      // 保存到数据库
-      if (userId) {
-        await this.saveResultsToDb(userId, configId, skuList, regionList, 'completed', isScheduled, scheduleId);
-      } else {
-        await this.saveResults(); // 保存到文件作为备份
-      }
       console.log('搜索完成！');
 
     } catch (error) {
       console.error('运行过程中出错:', error);
       // 可以在这里保存错误状态到数据库
-      if (userId) {
-        try {
-          await this.saveResultsToDb(userId, configId, skus, regions, 'failed', isScheduled, scheduleId);
-        } catch (dbError) {
-          console.error('保存错误状态到数据库失败:', dbError);
-        }
-      }
     } finally {
       if (this.browser) {
         await this.browser.close();
@@ -746,56 +884,6 @@ async createTextFile(results, skus, regions, date) {
     }
   }
 
-  showResultsView(results) {
-    let html = `
-    <div class="modal fade show" id="resultModal" style="display:block; position:fixed; top:10%; left:5%; width:90%; z-index:9999;">
-      <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-          <div class="modal-header">
-            <h5 class="modal-title">检测结果详情</h5>
-          </div>
-          <div class="modal-body">
-    `;
-
-    if (results && results.length > 0) {
-      html += `
-      <div class="table-responsive">
-        <table class="table table-sm">
-          <thead>
-            <tr>
-              <th>SKU</th>
-              <th>地区</th>
-              <th>库存</th>
-            </tr>
-          </thead>
-          <tbody>
-    `;
-      results.forEach(item => {
-        html += `
-        <tr>
-          <td>${item.sku}</td>
-          <td>${item.region}</td>
-          <td>
-            <span style="color:${item.stock.includes('未找到') ? 'red' : 'green'}">
-              ${item.stock}
-            </span>
-          </td>
-        </tr>
-      `;
-      });
-      html += `</tbody></table></div>`;
-    } else {
-      html += `<p class="text-muted">暂无结果数据</p>`;
-    }
-
-    html += `
-          </div>
-        </div>
-      </div>
-    </div>
-   `;
-    return html;
-  }
 
   async close() {
     if (this.browser) {

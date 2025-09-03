@@ -58,6 +58,73 @@ CREATE TABLE IF NOT EXISTS schedules (
   isActive INTEGER,
   createdAt TEXT
 );
+-- 创建商品信息表（单表存储所有信息）
+CREATE TABLE IF NOT EXISTS xizhiyue_products (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    
+    -- 基础信息
+    product_sku_id INTEGER UNIQUE NOT NULL,
+    product_id INTEGER NOT NULL,
+    product_sku TEXT NOT NULL,
+    product_name TEXT NOT NULL,
+    product_image TEXT,
+    
+    -- 销售信息
+    month_sales INTEGER DEFAULT 0,
+    product_price TEXT,
+    is_hot_sale INTEGER DEFAULT 0,
+    is_new INTEGER DEFAULT 0,
+    is_seckill INTEGER DEFAULT 0,
+    is_wish INTEGER DEFAULT 0,
+    
+    -- 库存状态（针对请求的地区）
+    target_region_id INTEGER NOT NULL,
+    target_region_name TEXT,
+    target_region_code TEXT,
+    target_quantity INTEGER DEFAULT 0,
+    target_price TEXT,
+    target_stock_status TEXT,
+    
+    -- 所有地区库存信息（JSON格式存储）
+    all_regions_inventory TEXT,
+    
+    -- 其他信息（JSON格式存储）
+    product_certificate TEXT, -- 证书信息
+    product_categories TEXT,  -- 分类信息
+    product_attributes TEXT,  -- 属性信息
+    formatted_attributes TEXT, -- 格式化属性
+    delivery_regions TEXT,    -- 所有地区配送信息
+    
+    -- 价格信息
+    member_price REAL,
+    price_currency TEXT,
+    price_currency_symbol TEXT,
+    base_price REAL,
+    guide_price REAL,
+    real_price TEXT,
+    
+    -- 时间信息
+    product_addtime TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    
+);
+-- 创建索引（移到表创建语句之外）
+CREATE INDEX IF NOT EXISTS idx_product_sku ON xizhiyue_products (product_sku);
+CREATE INDEX IF NOT EXISTS idx_sku_id ON xizhiyue_products (product_sku_id);
+CREATE INDEX IF NOT EXISTS idx_region ON xizhiyue_products (target_region_id);
+CREATE INDEX IF NOT EXISTS idx_hot_sale ON xizhiyue_products (is_hot_sale);
+CREATE INDEX IF NOT EXISTS idx_created_at ON xizhiyue_products (created_at);
+
+-- 创建商品历史价格表（可选，用于跟踪价格变化）
+CREATE TABLE IF NOT EXISTS xizhiyue_price_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    product_sku_id INTEGER NOT NULL,
+    region_id INTEGER NOT NULL,
+    price TEXT,
+    quantity INTEGER,
+    recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
 `);
 
 // 自动插入默认管理员
@@ -261,6 +328,108 @@ function deleteSchedule(id) {
   return stmt.run(id).changes > 0;
 }
 
+// 获取商品信息
+function getXizhiyueProductBySkuId(skuId) {
+  const stmt = this.db.prepare('SELECT * FROM xizhiyue_products WHERE product_sku_id = ?');
+  return stmt.get(skuId);
+}
+
+// 创建商品
+function createXizhiyueProduct(productData) {
+  const stmt = this.db.prepare(`
+    INSERT INTO xizhiyue_products 
+    (product_sku_id, product_id, product_sku, product_name, product_image, 
+     month_sales, product_price, is_hot_sale, is_new, is_seckill, is_wish,
+     target_region_id, target_region_name, target_region_code, target_quantity, 
+     target_price, target_stock_status, all_regions_inventory, product_certificate, 
+     product_categories, product_attributes, formatted_attributes, delivery_regions,
+     member_price, price_currency, price_currency_symbol, base_price, guide_price, 
+     real_price, product_addtime)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  
+  return stmt.run(
+    productData.product_sku_id,
+    productData.product_id,
+    productData.product_sku,
+    productData.product_name,
+    productData.product_image,
+    productData.month_sales,
+    productData.product_price,
+    productData.is_hot_sale,
+    productData.is_new,
+    productData.is_seckill,
+    productData.is_wish,
+    productData.target_region_id,
+    productData.target_region_name,
+    productData.target_region_code,
+    productData.target_quantity,
+    productData.target_price,
+    productData.target_stock_status,
+    productData.all_regions_inventory,
+    productData.product_certificate,
+    productData.product_categories,
+    productData.product_attributes,
+    productData.formatted_attributes,
+    productData.delivery_regions,
+    productData.member_price,
+    productData.price_currency,
+    productData.price_currency_symbol,
+    productData.base_price,
+    productData.guide_price,
+    productData.real_price,
+    productData.product_addtime
+  );
+}
+
+// 更新商品
+function updateXizhiyueProduct(skuId, productData) {
+  const stmt = this.db.prepare(`
+    UPDATE xizhiyue_products 
+    SET product_name = ?, product_image = ?, month_sales = ?, product_price = ?, 
+        is_hot_sale = ?, is_new = ?, is_seckill = ?, is_wish = ?,
+        target_region_id = ?, target_region_name = ?, target_region_code = ?, 
+        target_quantity = ?, target_price = ?, target_stock_status = ?,
+        all_regions_inventory = ?, product_certificate = ?, product_categories = ?, 
+        product_attributes = ?, formatted_attributes = ?, delivery_regions = ?,
+        member_price = ?, price_currency = ?, price_currency_symbol = ?, 
+        base_price = ?, guide_price = ?, real_price = ?, product_addtime = ?,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE product_sku_id = ?
+  `);
+  
+  return stmt.run(
+    productData.product_name,
+    productData.product_image,
+    productData.month_sales,
+    productData.product_price,
+    productData.is_hot_sale,
+    productData.is_new,
+    productData.is_seckill,
+    productData.is_wish,
+    productData.target_region_id,
+    productData.target_region_name,
+    productData.target_region_code,
+    productData.target_quantity,
+    productData.target_price,
+    productData.target_stock_status,
+    productData.all_regions_inventory,
+    productData.product_certificate,
+    productData.product_categories,
+    productData.product_attributes,
+    productData.formatted_attributes,
+    productData.delivery_regions,
+    productData.member_price,
+    productData.price_currency,
+    productData.price_currency_symbol,
+    productData.base_price,
+    productData.guide_price,
+    productData.real_price,
+    productData.product_addtime,
+    skuId
+  );
+}
+
 
 module.exports = {
   getAllUsers,
@@ -281,5 +450,8 @@ module.exports = {
   getSchedules,
   getScheduleById,
   updateSchedule,
-  deleteSchedule
+  deleteSchedule,
+  getXizhiyueProductBySkuId,
+  updateXizhiyueProduct,
+  createXizhiyueProduct
 };
