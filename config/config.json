@@ -23,7 +23,7 @@
   },
 
   "browser": {
-    "headless": true,
+    "headless": false,
     "timeout": 30000,
     "viewport": {
       "width": 1280,

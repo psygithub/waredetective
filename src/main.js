@@ -47,13 +47,8 @@ class WarehouseDetective {
     }
 
     // 否则重新登录
+    console.log('没有登录，重新登录...');
     await this.login();
-    await this.page.waitForTimeout(3000); // 等待登录完成
-
-    // 获取新的认证信息
-    this.authCookies = await this.page.context().cookies();
-    this.authToken = await this.getAuthTokenFromStorage();
-    this.lastLoginTime = Date.now();
 
     return {
       cookies: this.authCookies,
@@ -83,11 +78,22 @@ class WarehouseDetective {
   }
 
   // 从storage获取token
-  async getAuthTokenFromStorage() {
+  getAuthTokenFromStorage() {
+    console.log(`12312312321`);
     try {
-      return await this.page.evaluate(() => {
-        return localStorage.getItem('auth_token') ||
-          localStorage.getItem('token') ||
+    const localStorageData = this.page.evaluate(() => {
+      let items = {};
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        items[key] = localStorage.getItem(key);
+      }
+      return items;
+    });
+    console.log('LocalStorage:', localStorageData);
+      return this.page.evaluate(() => {
+        console.log(`localStorage ${JSON.stringify(localStorage)}`);
+        return localStorage.getItem('access_token') ||
+          localStorage.getItem('im_token') ||
           sessionStorage.getItem('auth_token') ||
           document.cookie.match(/(^|;)token=([^;]+)/)?.[2];
       });
@@ -129,6 +135,13 @@ class WarehouseDetective {
       await this.page.locator('label span').nth(1).click();
       await this.page.getByText('登录/注册').click();
       this.lastLoginTime = Date.now();
+      this.page.waitForTimeout(3000);
+      // 获取token和cookies
+      this.authToken = this.getAuthTokenFromStorage();
+      this.authCookies = await this.page.context().cookies();
+      this.lastLoginTime = Date.now();
+
+      console.log(`登录成功，token：${this.authToken}`);
       return true;
     } catch (error) {
       console.error('登录过程中出错:', error);
@@ -232,7 +245,7 @@ class WarehouseDetective {
   }
 
 
-createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
+  createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
     let htmlContent = `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -339,14 +352,14 @@ createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
       border-radius: 4px;
     }
     .stock-available {
-      color: #8c9e25ff;
+      color: #15e08cff;
       font-weight: bold;
       background-color: #f0fff4;
       padding: 4px 8px;
       border-radius: 4px;
     }
     .stock-sufficient {
-      color: #006400;
+      color: #057a05ff;
       font-weight: bold;
       background-color: #e6ffe6;
       padding: 4px 8px;
@@ -427,7 +440,7 @@ createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
     for (const item of results) {
       // 根据库存状态确定CSS类
       let stockClass = 'stock-unknown';
-      
+
       if (item.stock.includes('缺货') || item.stock.includes('无库存')) {
         stockClass = 'stock-out-of-stock';
       } else if (item.stock.includes('库存紧张')) {
@@ -676,11 +689,13 @@ createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
   async callServerAPI(endpoint, method = 'GET', data = null) {
     try {
       const url = `${this.serverBaseUrl}${endpoint}`;
+      const authToken = (await this.getAuthInfo()).token;
+      console.log(`BearerToken ${authToken}`);
       const options = {
         method,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': `Bearer ${(await this.getAuthInfo()).token}` // 如果需要认证
+          'Authorization': `Bearer ${authToken}` // 如果需要认证
         }
       };
 
@@ -713,9 +728,9 @@ createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
   }
 
   // 获取特定商品详情
-  async getProductDetail(productSkuId, regionId = '6') {
+  async getProductDetail(productId, regionId = '6') {
     try {
-      const endpoint = `/api/xizhiyue/product/${productSkuId}?regionId=${regionId}`;
+      const endpoint = `/api/xizhiyue/product/${productId}?regionId=${regionId}`;
       const result = await this.callServerAPI(endpoint);
       return result;
     } catch (error) {
@@ -763,48 +778,54 @@ createHtml(results, skus, regions, date, inStockCount, outOfStockCount) {
   }
 
 
-// 将商品数据转换为邮件结果格式
-convertProductsToResults(products, targetRegionId = '6') {
-  const results = [];
+  // 将商品数据转换为邮件结果格式
+  convertProductsToResults(products, targetRegionId = '6') {
+    const results = [];
 
-  for (const product of products) {
-    // 从delivery_regions获取目标地区的库存信息
-    let stockQuantity = 0;
-    let stockStatus = '未知';
-    
-    // 直接从产品对象获取库存数量
-    if (product.qty) {
-      stockQuantity = parseInt(product.qty) || 0;
-      stockStatus = this.determineStockStatus(stockQuantity);
-    }
-    
-    // 尝试从delivery_regions获取更精确的信息
-    if (product.delivery_regions && product.delivery_regions[targetRegionId]) {
-      const regionData = product.delivery_regions[targetRegionId][0];
-      if (regionData && regionData.qty) {
-        stockQuantity = parseInt(regionData.qty) || 0;
+    for (const product of products) {
+      // 从delivery_regions获取目标地区的库存信息
+      let stockQuantity = 0;
+      let stockStatus = '未知';
+
+      console.log("---产品：" + product.product_name + ";qty:" + product.qty);
+      // 直接从产品对象获取库存数量
+      if (product.qty != undefined && product.qty != null) {
+        stockQuantity = parseInt(product.qty) || 0;
         stockStatus = this.determineStockStatus(stockQuantity);
+        console.log("---产品：" + product.product_name + ";stockQuantity:" + stockQuantity + ",从产品对象获取状态：" + stockStatus);
       }
+
+      // 尝试从delivery_regions获取更精确的信息
+      if (product.delivery_regions && product.delivery_regions[targetRegionId]) {
+        const regionData = product.delivery_regions[targetRegionId][0];
+        if (regionData && regionData.qty) {
+          stockQuantity = parseInt(regionData.qty) || 0;
+          stockStatus = this.determineStockStatus(stockQuantity);
+          console.log("---产品：" + product.product_name + ";stockQuantity:" + stockQuantity + ",从delivery_regions产品对象获取状态：" + stockStatus);
+
+        }
+      }
+
+      // 构建结果对象
+      const result = {
+        product_id: product.product_id,
+        product_sku_id: product.product_sku_id,
+        sku: product.product_sku,
+        region: targetRegionId.toString(),
+        stock: this.formatStockStatus(stockStatus, stockQuantity),
+        lastUpdated: new Date().toISOString(),
+        img: product.product_image || '',
+        url: this.generateProductUrl(product.product_id),
+        product_name: product.product_name,
+        quantity: stockQuantity,
+        price: product.product_price || '未知'
+      };
+
+      results.push(result);
     }
 
-    // 构建结果对象
-    const result = {
-      sku: product.product_sku,
-      region: targetRegionId.toString(),
-      stock: this.formatStockStatus(stockStatus, stockQuantity),
-      lastUpdated: new Date().toISOString(),
-      img: product.product_image || '',
-      url: this.generateProductUrl(product.product_sku_id),
-      product_name: product.product_name,
-      quantity: stockQuantity,
-      price: product.product_price || '未知'
-    };
-
-    results.push(result);
+    return results;
   }
-
-  return results;
-}
 
   // 格式化库存状态显示
   formatStockStatus(status, quantity) {
@@ -820,13 +841,13 @@ convertProductsToResults(products, targetRegionId = '6') {
   }
 
   // 生成商品URL（根据你的网站结构）
-  generateProductUrl(productSkuId) {
-    return `https://westmonth.com/product/${productSkuId}`;
+  generateProductUrl(productId) {
+    return `https://westmonth.com/products/${productId}`;
   }
 
   // 判断库存状态（复用之前的方法）
   determineStockStatus(quantity) {
-    if (!quantity || quantity === 0) return '缺货';
+    if (quantity == 0) return '缺货';
     if (quantity > 0 && quantity <= 10) return '库存紧张';
     if (quantity > 10 && quantity <= 100) return '有货';
     if (quantity > 100) return '库存充足';
@@ -838,11 +859,11 @@ convertProductsToResults(products, targetRegionId = '6') {
     try {
       await this.init();
 
-      const loginSuccess = await this.login();
-      if (!loginSuccess) {
-        console.log('登录失败，程序终止');
-        return;
-      }
+      // const loginSuccess = await this.login();
+      // if (!loginSuccess) {
+      //   console.log('登录失败，程序终止');
+      //   return;
+      // }
       //return;
 
       // 如果没有提供SKU列表，使用配置文件中的
@@ -858,10 +879,20 @@ convertProductsToResults(products, targetRegionId = '6') {
       // const results = await detective.searchSkuList(skuList, regionList);
       // 示例：获取商品列表
       console.log('正在获取商品列表...');
-      const productList = await this.getProductList('6', '1', '20');
-      console.log('获取到商品数量:', productList.data.length);
+      const regionId = "6";//菲律宾
+
+      const productId = "5791";
+      const productSkuId = "10502";
+      const sku = "SM标ytn914yx01-20ml";
+      const invUrl = `/api/xizhiyue/productInventories?productId=${productId}&productSkuId=${productSkuId}&regionId=${regionId}`;
+      const res = await this.callServerAPI(invUrl)
+      console.log(JSON.stringify(res));
+
+      return;
+      const productList = await this.getProductList(regionId, '1', '20');
+      console.log('获取到商品数量:', productList.data.data.length);
       console.log(JSON.stringify(productList));
-        let results = [];
+      let results = [];
       if (productList && productList.data && productList.data.data && productList.data.data.length > 0) {
         // 使用第一个地区ID，或者可以根据需要遍历所有地区
         console.log('开始转换的商品结果');

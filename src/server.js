@@ -82,7 +82,7 @@ class WebServer {
   // 公共方法：使用认证信息发送请求（带自动重试）
   async makeAuthenticatedRequest(url, options = {}, maxRetries = 2) {
     let authInfo = await this.getXizhiyueAuthInfo();
-
+    console.log(`BearerToken ${authInfo.token}`)
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const requestOptions = {
@@ -661,7 +661,7 @@ class WebServer {
           const sortField = req.query.sort_field || '2';
           const sortMode = req.query.sort_mode || '2';
 
-          const url = `https://westmonth.com/shop_api/products/load_list?delivery_region_id=${regionId}&sort_field=${sortField}&sort_mode=${sortMode}&onlyShow=1&page=${page}&pagesize=${pageSize}`;
+          const url = `https://westmonth.com/shop_api/products/load_list?delivery_region_id=${regionId}&sort_field=${sortField}&sort_mode=${sortMode}&page=${page}&pagesize=${pageSize}`;
 
           const data = await this.makeAuthenticatedRequest(url);
           res.json(data);
@@ -680,6 +680,26 @@ class WebServer {
           const regionId = req.query.regionId || '6';
 
           const url = `https://westmonth.com/shop_api/products/detail?product_id=${productId}&delivery_region_id=${regionId}`;
+
+          const data = await this.makeAuthenticatedRequest(url);
+          res.json(data);
+        } catch (error) {
+          console.error('获取商品详情失败:', error);
+          res.status(500).json({ error: error.message });
+        }
+      }
+    );
+
+    // 获取商品库存
+    this.app.get('/api/xizhiyue/productInventories/',
+      // auth.authenticateToken.bind(auth),
+      async (req, res) => {
+        try {
+          const productId = req.params.productId;
+          const productSkuId = req.params.producSkutId;
+          const regionId = req.query.regionId || '6';
+
+          const url = `https://westmonth.com/shop_api/products/system-price?quantity=1&service_type=2&delivery_type=-1&is_wholesale=2&product_id=${productId}&product_sku_id=${productSkuId}&delivery_region_id=${regionId}`;
 
           const data = await this.makeAuthenticatedRequest(url);
           res.json(data);
@@ -1019,7 +1039,7 @@ class WebServer {
   async saveProductToSingleTable(product, targetRegionId) {
     // 获取目标地区的库存信息
     const targetRegionInfo = this.getTargetRegionInfo(product, targetRegionId);
-
+    console.log("-------product_name :"+ targetRegionInfo.product_name +",quantity:" + targetRegionInfo.quantity);    
     const productData = {
       product_sku_id: product.product_sku_id,
       product_id: product.product_id,
