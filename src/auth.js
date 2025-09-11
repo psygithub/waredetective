@@ -16,7 +16,7 @@ class AuthService {
         role: user.role 
       },
       JWT_SECRET,
-      { expiresIn: '24h' }
+      { expiresIn: '1Week' }
     );
   }
 

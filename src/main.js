@@ -48,11 +48,11 @@ class WarehouseDetective {
 
     // 否则重新登录
     console.log('没有登录，重新登录...');
-    await this.login();
+    await this.loginXZY();
 
     return {
       cookies: this.authCookies,
-      token: this.authToken
+      token: localStorage.getItem('token')
     };
   }
 
@@ -73,23 +73,23 @@ class WarehouseDetective {
   // 检查认证是否有效（假设1小时内有效）
   isAuthValid() {
     if (!this.lastLoginTime) return false;
-    const oneHour = 60 * 60 * 1000;
-    return (Date.now() - this.lastLoginTime) < oneHour;
+    const oneDay = 24 * 60 * 60 * 1000;
+    return (Date.now() - this.lastLoginTime) < oneDay;
   }
 
   // 从storage获取token
   getAuthTokenFromStorage() {
     console.log(`12312312321`);
     try {
-    const localStorageData = this.page.evaluate(() => {
-      let items = {};
-      for (let i = 0; i < localStorage.length; i++) {
-        const key = localStorage.key(i);
-        items[key] = localStorage.getItem(key);
-      }
-      return items;
-    });
-    console.log('LocalStorage:', localStorageData);
+      const localStorageData = this.page.evaluate(() => {
+        let items = {};
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          items[key] = localStorage.getItem(key);
+        }
+        return items;
+      });
+      console.log('LocalStorage:', localStorageData);
       return this.page.evaluate(() => {
         console.log(`localStorage ${JSON.stringify(localStorage)}`);
         return localStorage.getItem('access_token') ||
@@ -112,7 +112,7 @@ class WarehouseDetective {
 
 
 
-  async login() {
+  async loginXZY() {
     console.log('正在登录...');
     try {
       await this.page.goto(this.config.website.loginUrl, {
@@ -150,7 +150,22 @@ class WarehouseDetective {
     }
   }
 
+  async loginAdmin() {
+    console.log('正在登录管理后台...');
+    try {
+      await this.page.goto(this.config.website.adminLoginUrl, {
+        waitUntil: 'networkidle',
+      });
+      await page.getByRole('textbox', { name: '用户名' }).click();
+      await page.getByRole('textbox', { name: '用户名' }).fill('admin');
+      await page.getByRole('textbox', { name: '密码' }).click();
+      await page.getByRole('textbox', { name: '密码' }).fill('admin123');
+      await page.getByRole('button', { name: ' 登录' }).click();
+    }
+    catch (error) {
 
+    }
+  }
   // 发送邮件（截取整个结果弹窗）
   async sendEmailWithAttach(results, skus, regions, toEmail = this.config.email?.to || []) {
     // 检查results是否为null或undefined
@@ -703,10 +718,11 @@ class WarehouseDetective {
         options.body = JSON.stringify(data);
       }
 
+      console.log(`调用服务器API: ${url} options: ${options}`);
       const response = await fetch(url, options);
 
       if (!response.ok) {
-        throw new Error(`服务器请求失败: ${url} ${response.status} ${response.statusText}`);
+        throw new Error(`服务器请求失败: ${url} ${response.status} ${response.statusText}`, response.json());
       }
 
       return await response.json();
@@ -884,7 +900,9 @@ class WarehouseDetective {
       const productId = "5791";
       const productSkuId = "10502";
       const sku = "SM标ytn914yx01-20ml";
+      // const invUrl = `/api/xizhiyue/productInventories?productId=${productId}&productSkuId=${productSkuId}&regionId=${regionId}`;
       const invUrl = `/api/xizhiyue/productInventories?productId=${productId}&productSkuId=${productSkuId}&regionId=${regionId}`;
+
       const res = await this.callServerAPI(invUrl)
       console.log(JSON.stringify(res));
 

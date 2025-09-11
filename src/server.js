@@ -50,21 +50,55 @@ class WebServer {
       return this.xizhiyueAuthInfo;
     }
 
-    let detective = null;
+    // let detective = null;
+    let access_token = null;
     try {
-      detective = new WarehouseDetective();
-      await detective.init();
+      // detective = new WarehouseDetective();
+      // await detective.init();
 
-      if (forceLogin) {
-        detective.clearAuthCache(); // 强制重新登录
+      // if (forceLogin) {
+      //   detective.clearAuthCache(); // 强制重新登录
+      // }
+
+      // const authInfo = await detective.getAuthInfo();
+      try {
+        const url = `https://customer.westmonth.com/login_v2`;
+        const body = { area_code: `+86`, account: "18575215654", password: "FUNyaxN9SSB9WiPA5Xhz096kgDmlKag3tOqfoT0sUonuj7YHEANZOt8HD13Rq6q4edNaHsbAHw/+Kghrw+Muw96y+xKL1W8tfl29aQj8+TC6Ht257OXVWGvYQmxgQQtQymzhCitziKwi3lFGP+Kpv+ZaCjIwpqV4jlqlgrbwvLsYep31USgj80nAhll4tYDVEDNM29GfP8zvdC2MLMt8mNRZzMlTNwtcII9vA1J4mKjfQR6OKpSt7nWu90iUYD4bgRU70PfWdJrJ3JBYcrBUeVcNWid0gQMc4cl4SzxgyiqXrocqk5KIg8U/h/2yOUa/c3x77wXoEKb0dEuzAlPo5A==", type: `1` };
+        const options = {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome'
+          },
+          body: JSON.stringify(body)
+        }
+
+        const response = await fetch(url, options); // 强制登录
+
+        console.log(`获取token请求结果:`, response);
+        // 如果认证失败，尝试重新登录
+        if (response.status === 401 || response.status === 403) {
+          throw new Error(`获取token失败: ${response.status} ${response.statusText}`);
+        }
+
+        if (!response.ok) {
+          throw new Error(`获取token请求失败: ${response.status} ${response.statusText}`);
+        }
+
+        const res = await response.json();
+        console.log(`获取token请求结果body:`, res);
+        access_token = res.data.access_token;
+      }
+      catch (error) {
+        console.log(`获取token请求失败:`, error);
+        throw new Error(`获取token请求失败:`, error);
       }
 
-      const authInfo = await detective.getAuthInfo();
 
       // 更新缓存
       this.xizhiyueAuthInfo = {
-        cookies: authInfo.cookies,
-        token: authInfo.token,
+        // cookies: authInfo.cookies,
+        token: access_token,
         lastUpdated: Date.now()
       };
 
@@ -73,22 +107,20 @@ class WebServer {
     } catch (error) {
       console.error('获取认证信息失败:', error);
       throw error;
-    } finally {
-      if (detective) {
-        await detective.close();
-      }
     }
   }
   // 公共方法：使用认证信息发送请求（带自动重试）
   async makeAuthenticatedRequest(url, options = {}, maxRetries = 2) {
-    let authInfo = await this.getXizhiyueAuthInfo();
+    // let authInfo = await this.getXizhiyueAuthInfo();
+    // for test 
+    let authInfo = { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI5ZTkyNDNkOC1hM2QxLTQ1NGItYjYyNC0yMGEwZTBmMDgxNDQiLCJqdGkiOiJmZDJjYjVhMzg3NGQzMmRhYTI3MGFmOGExOGQxZWExMzJiMDQ3ZWFkNWQyNzIzYjBhNDBlYjBhMGQ2MDgzOGIzMGU1ZDhiN2QxMTUwZjU5OCIsImlhdCI6MTc1NzU2MzExMi43MjEyNDYsIm5iZiI6MTc1NzU2MzExMi43MjEyNDgsImV4cCI6MTc1ODE2NzkxMi43MTMwMywic3ViIjoiNzc5MDkiLCJzY29wZXMiOlsiKiJdfQ.AZRhXr9hVDezSKlb4oeeb8uFyTl_HdZneTOp26Om1-CzZuCod8J_P9a03eCbSZy7V5UOvNBDaA_43a2aU1MGtgIZYGidNRVtUfvBIcHBVwxf21d3WgB_F2oImZBihrLzglFEcO5vsDPjky2jjqsUuUTxtYPhN0w4v1PnsOmfXUedidrINlqeMLyWYwFIq3JDc_4YmBnKch3NXLoQ6n0CD12a-G0J6dxAys7O8850P2rJxU7I1Yy1eQCMNj8k2b1bnq3VBlRKM3qtKymYsd47tvkpeKyqJ5oXYamYPsqWUEhkSNz7nMQP62lhlJrjd2AUg0ZXawbU_Op5xOVcsx8tdvlAsWUgh2KSEPk4EhFjVRRaOhshFDUNMfCs065bghY4ZZPmUeF5MBwyjqxrhKYuNtxL3TSuQ31N_9rwp1xFfSV2tlZxr54HP_ab9W5YUFWSrDQ8PimXAM2nFOq8YUTpb12XJAOGoLMmYrmZM0jGCmjWPsYs4mLI-xkSRg5-_BLTWn3wQwCcviGSxoSEwdebrvdbPwTFTj_zeOs6hlI6PfmsYsMbCZHxHe_LyDXukAf8TSzPG-cE9iDAJIva2ReFJSTXHH3vt3P6a3KCd4oeMnVFBi7X8sV3TmM8R5wFjP3SSjo7t9-N5kslkiOh-J3aBG9fMA4TkBPPV0bBycVMGqA' };
     console.log(`BearerToken ${authInfo.token}`)
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const requestOptions = {
           ...options,
           headers: {
-            'Cookie': authInfo.cookies.map(c => `${c.name}=${c.value}`).join('; '),
+            // 'Cookie': authInfo.cookies.map(c => `${c.name}=${c.value}`).join('; '),
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
             'Authorization': authInfo.token ? `Bearer ${authInfo.token}` : '',
@@ -96,7 +128,17 @@ class WebServer {
           }
         };
 
+        console.log(`开始请求 url: ${url}`);
+        console.log(`请求选项 requestOptions:`, requestOptions);
+
         const response = await fetch(url, requestOptions);
+
+        // 打印 HTTP 状态
+        console.log(`响应状态: ${response.status} ${response.statusText}`);
+
+        // 拿原始文本（保证能看到真实返回）
+        const rawText = await response.text();
+        console.log("响应原始文本:", rawText);
 
         // 如果认证失败，尝试重新登录
         if (response.status === 401 || response.status === 403) {
@@ -110,10 +152,18 @@ class WebServer {
         }
 
         if (!response.ok) {
-          throw new Error(`请求失败: ${response.status} ${response.statusText}`);
+          throw new Error(`请求失败: ${response.status} ${response.statusText}，返回内容: ${rawText}`);
         }
 
-        return await response.json();
+        // 尝试解析 JSON
+        try {
+          const data = JSON.parse(rawText);
+          console.log("解析后的 JSON:", data);
+          return data;
+        } catch (e) {
+          console.warn("返回的不是 JSON，直接返回原始文本");
+          return rawText;
+        }
       } catch (error) {
         if (attempt === maxRetries) {
           throw error; // 最后一次尝试仍然失败，抛出错误
@@ -139,7 +189,7 @@ class WebServer {
       }
     }));
     this.app.use(cors({
-      origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+      origin: '*',//process.env.CORS_ORIGIN || 'http://localhost:3000',
       credentials: true
     }));
 
@@ -650,6 +700,39 @@ class WebServer {
       lastUpdated: null
     };
 
+    this.app.get('/api/xizhiyue/login',
+      async (req, res) => {
+        try {
+          const url = `https://customer.westmonth.com/login_v2`;
+          const body = { area_code: `+86`, login_name: "18575215654", password: "FUNyaxN9SSB9WiPA5Xhz096kgDmlKag3tOqfoT0sUonuj7YHEANZOt8HD13Rq6q4edNaHsbAHw/+Kghrw+Muw96y+xKL1W8tfl29aQj8+TC6Ht257OXVWGvYQmxgQQtQymzhCitziKwi3lFGP+Kpv+ZaCjIwpqV4jlqlgrbwvLsYep31USgj80nAhll4tYDVEDNM29GfP8zvdC2MLMt8mNRZzMlTNwtcII9vA1J4mKjfQR6OKpSt7nWu90iUYD4bgRU70PfWdJrJ3JBYcrBUeVcNWid0gQMc4cl4SzxgyiqXrocqk5KIg8U/h/2yOUa/c3x77wXoEKb0dEuzAlPo5A==", type: `1` };
+          const options = {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome'
+            },
+            body: JSON.stringify(body)
+          }
+
+          const response = await fetch(url, options); // 强制登录
+          // 如果认证失败，尝试重新登录
+          if (response.status === 401 || response.status === 403) {
+            throw new Error(`获取token失败: ${response.status} ${response.statusText}`);
+          }
+
+          if (!response.ok) {
+            throw new Error(`获取token请求失败: ${response.status} ${response.statusText}`);
+          }
+
+          return await response.json();
+        }
+        catch (error) {
+          console.log(`获取token请求失败:`, error);
+          throw new Error(`获取token请求失败:`, error);
+        }
+      });
+
+
     // 获取商品列表
     this.app.get('/api/xizhiyue/products',
       // auth.authenticateToken.bind(auth),
@@ -695,16 +778,18 @@ class WebServer {
       // auth.authenticateToken.bind(auth),
       async (req, res) => {
         try {
-          const productId = req.params.productId;
-          const productSkuId = req.params.producSkutId;
+          console.log(`asdqwe1231231231`);
+          const productId = req.query.productId;
+          const productSkuId = req.query.productSkuId;
           const regionId = req.query.regionId || '6';
 
           const url = `https://westmonth.com/shop_api/products/system-price?quantity=1&service_type=2&delivery_type=-1&is_wholesale=2&product_id=${productId}&product_sku_id=${productSkuId}&delivery_region_id=${regionId}`;
 
-          const data = await this.makeAuthenticatedRequest(url);
+          const options = { method: 'GET' };
+          const data = await this.makeAuthenticatedRequest(url, options);
           res.json(data);
         } catch (error) {
-          console.error('获取商品详情失败:', error);
+          console.error('获取商品库存失败:', error);
           res.status(500).json({ error: error.message });
         }
       }
@@ -730,7 +815,7 @@ class WebServer {
     );
     // 获取库存信息
     this.app.get('/api/xizhiyue/inventory',
-      auth.authenticateToken.bind(auth),
+      // auth.authenticateToken.bind(auth),
       async (req, res) => {
         try {
           const sku = req.query.sku;
@@ -753,7 +838,7 @@ class WebServer {
 
     // 搜索商品
     this.app.get('/api/xizhiyue/search',
-      auth.authenticateToken.bind(auth),
+      // auth.authenticateToken.bind(auth),
       async (req, res) => {
         try {
           const keyword = req.query.keyword;
@@ -777,7 +862,7 @@ class WebServer {
 
     // 获取分类列表
     this.app.get('/api/xizhiyue/categories',
-      auth.authenticateToken.bind(auth),
+      // auth.authenticateToken.bind(auth),
       async (req, res) => {
         try {
           const url = 'https://westmonth.com/shop_api/categories/list';
@@ -793,7 +878,7 @@ class WebServer {
 
     // 手动刷新认证信息
     this.app.post('/api/xizhiyue/refresh-auth',
-      auth.authenticateToken.bind(auth),
+      // auth.authenticateToken.bind(auth),
       async (req, res) => {
         try {
           await this.getXizhiyueAuthInfo(true); // 强制刷新
@@ -807,7 +892,7 @@ class WebServer {
 
     // 获取认证状态
     this.app.get('/api/xizhiyue/auth-status',
-      auth.authenticateToken.bind(auth),
+      // auth.authenticateToken.bind(auth),
       async (req, res) => {
         try {
           const isValid = this.isAuthInfoValid(this.xizhiyueAuthInfo);
@@ -835,32 +920,32 @@ class WebServer {
   }
 
   // 获取夕之悦认证信息
-  async getXizhiyueAuthInfo(forceLogin = false) {
-    let detective = null;
-    try {
-      detective = new WarehouseDetective();
-      await detective.init();
+  // async getXizhiyueAuthInfo(forceLogin = false) {
+  //   let detective = null;
+  //   try {
+  //     detective = new WarehouseDetective();
+  //     await detective.init();
 
-      if (forceLogin) {
-        detective.clearAuthCache(); // 强制重新登录
-      }
+  //     if (forceLogin) {
+  //       detective.clearAuthCache(); // 强制重新登录
+  //     }
 
-      const authInfo = await detective.getAuthInfo();
+  //     const authInfo = await detective.getAuthInfo();
 
-      return {
-        cookies: authInfo.cookies,
-        token: authInfo.token,
-        lastUpdated: Date.now()
-      };
-    } catch (error) {
-      console.error('获取认证信息失败:', error);
-      throw error;
-    } finally {
-      if (detective) {
-        await detective.close();
-      }
-    }
-  }
+  //     return {
+  //       cookies: authInfo.cookies,
+  //       token: authInfo.token,
+  //       lastUpdated: Date.now()
+  //     };
+  //   } catch (error) {
+  //     console.error('获取认证信息失败:', error);
+  //     throw error;
+  //   } finally {
+  //     if (detective) {
+  //       await detective.close();
+  //     }
+  //   }
+  // }
 
   // 执行仓库检测任务
   async executeTask(skus, regions) {
@@ -869,7 +954,7 @@ class WebServer {
       detective = new WarehouseDetective();
       await detective.init();
 
-      const loginSuccess = await detective.login();
+      const loginSuccess = await detective.loginXZY();
       if (!loginSuccess) {
         throw new Error('登录失败');
       }
@@ -1039,7 +1124,7 @@ class WebServer {
   async saveProductToSingleTable(product, targetRegionId) {
     // 获取目标地区的库存信息
     const targetRegionInfo = this.getTargetRegionInfo(product, targetRegionId);
-    console.log("-------product_name :"+ targetRegionInfo.product_name +",quantity:" + targetRegionInfo.quantity);    
+    console.log("-------product_name :" + targetRegionInfo.product_name + ",quantity:" + targetRegionInfo.quantity);
     const productData = {
       product_sku_id: product.product_sku_id,
       product_id: product.product_id,

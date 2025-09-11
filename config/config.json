@@ -2,7 +2,10 @@
   "website": {
     "loginUrl": "https://westmonth.com/",
     "username": "18575215654",
-    "password": "rych2025@"
+    "password": "rych2025@",
+    "adminLoginUrl": "http://localhost:3000/login", 
+    "adminUsername": "admin",
+    "adminPassword": "admin123"
   },
   "search": {
     "skus": ["HO-A05-0851-01","JAA05-A015-100-PK1"],
