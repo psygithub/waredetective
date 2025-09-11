@@ -728,20 +728,20 @@ function showConfigModal(configId = null) {
 // 加载配置用于编辑
 async function loadConfigForEdit(configId) {
   try {
-        const schedule = await apiRequest(`/api/schedules/${scheduleId}`);
+        const config = await apiRequest(`/api/configs/${configId}`);
         
-        if (!schedule) {
-            throw new Error('未找到定时任务');
+        if (!config) {
+            throw new Error('未找到配置');
         }
 
-        document.getElementById('scheduleId').value = schedule.id;
-        document.getElementById('scheduleName').value = schedule.name || '';
-        document.getElementById('scheduleConfigId').value = schedule.configId || '';
-        document.getElementById('scheduleCron').value = schedule.cron || '';
-        document.getElementById('scheduleActive').checked = schedule.isActive;
+        document.getElementById('configId').value = config.id;
+        document.getElementById('configName').value = config.name || '';
+        document.getElementById('configSkus').value = config.skus || '';
+        document.getElementById('configRegions').value = config.regions || '';
+        document.getElementById('configDescription').value = config.description || '';
 
     } catch (error) {
-        console.error('加载定时任务失败:', error);
+        console.error('加载配置失败:', error);
         throw error;
     }
 }
