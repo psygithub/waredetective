@@ -11,6 +11,9 @@ const database = require('./db_sqlite');
 
 const auth = require('./auth');
 const WarehouseDetective = require('./main');
+const inventoryService = require('./inventoryService');
+const analysisService = require('./analysisService');
+const fetch = require('node-fetch');
 
 let token = null;
 class WebServer {
@@ -36,6 +39,7 @@ class WebServer {
     this.setupMiddleware();
     this.setupRoutes();
   }
+
   // 公共方法：检查认证信息是否有效
   isAuthInfoValid(authInfo, maxAge = 60 * 60 * 1000) {
     if (!authInfo || !authInfo.lastUpdated) return false;
@@ -44,24 +48,12 @@ class WebServer {
 
   // 公共方法：获取夕之悦认证信息（带缓存和自动刷新）
   async getXizhiyueAuthInfo(forceLogin = false) {
-    // 如果不需要强制登录且有有效的认证信息，直接返回
     if (!forceLogin && this.isAuthInfoValid(this.xizhiyueAuthInfo)) {
       console.log('使用缓存的认证信息');
       return this.xizhiyueAuthInfo;
     }
 
-    // let detective = null;
-    let access_token = null;
     try {
-      // detective = new WarehouseDetective();
-      // await detective.init();
-
-      // if (forceLogin) {
-      //   detective.clearAuthCache(); // 强制重新登录
-      // }
-
-      // const authInfo = await detective.getAuthInfo();
-      try {
         const url = `https://customer.westmonth.com/login_v2`;
         const body = { area_code: `+86`, account: "18575215654", password: "FUNyaxN9SSB9WiPA5Xhz096kgDmlKag3tOqfoT0sUonuj7YHEANZOt8HD13Rq6q4edNaHsbAHw/+Kghrw+Muw96y+xKL1W8tfl29aQj8+TC6Ht257OXVWGvYQmxgQQtQymzhCitziKwi3lFGP+Kpv+ZaCjIwpqV4jlqlgrbwvLsYep31USgj80nAhll4tYDVEDNM29GfP8zvdC2MLMt8mNRZzMlTNwtcII9vA1J4mKjfQR6OKpSt7nWu90iUYD4bgRU70PfWdJrJ3JBYcrBUeVcNWid0gQMc4cl4SzxgyiqXrocqk5KIg8U/h/2yOUa/c3x77wXoEKb0dEuzAlPo5A==", type: `1` };
         const options = {
@@ -72,102 +64,56 @@ class WebServer {
           },
           body: JSON.stringify(body)
         }
-
-        const response = await fetch(url, options); // 强制登录
-
-        console.log(`获取token请求结果:`, response);
-        // 如果认证失败，尝试重新登录
-        if (response.status === 401 || response.status === 403) {
-          throw new Error(`获取token失败: ${response.status} ${response.statusText}`);
-        }
-
+        const response = await fetch(url, options);
         if (!response.ok) {
           throw new Error(`获取token请求失败: ${response.status} ${response.statusText}`);
         }
-
         const res = await response.json();
-        console.log(`获取token请求结果body:`, res);
-        access_token = res.data.access_token;
-      }
-      catch (error) {
-        console.log(`获取token请求失败:`, error);
-        throw new Error(`获取token请求失败:`, error);
-      }
+        const access_token = res.data.access_token;
 
-
-      // 更新缓存
-      this.xizhiyueAuthInfo = {
-        // cookies: authInfo.cookies,
-        token: access_token,
-        lastUpdated: Date.now()
-      };
-
-      console.log('获取新的认证信息成功');
-      return this.xizhiyueAuthInfo;
+        this.xizhiyueAuthInfo = {
+            token: access_token,
+            lastUpdated: Date.now()
+        };
+        console.log('获取新的认证信息成功');
+        return this.xizhiyueAuthInfo;
     } catch (error) {
       console.error('获取认证信息失败:', error);
       throw error;
     }
   }
+
   // 公共方法：使用认证信息发送请求（带自动重试）
   async makeAuthenticatedRequest(url, options = {}, maxRetries = 2) {
-    // let authInfo = await this.getXizhiyueAuthInfo();
-    // for test 
-    let authInfo = { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJhdWQiOiI5ZTkyNDNkOC1hM2QxLTQ1NGItYjYyNC0yMGEwZTBmMDgxNDQiLCJqdGkiOiJmZDJjYjVhMzg3NGQzMmRhYTI3MGFmOGExOGQxZWExMzJiMDQ3ZWFkNWQyNzIzYjBhNDBlYjBhMGQ2MDgzOGIzMGU1ZDhiN2QxMTUwZjU5OCIsImlhdCI6MTc1NzU2MzExMi43MjEyNDYsIm5iZiI6MTc1NzU2MzExMi43MjEyNDgsImV4cCI6MTc1ODE2NzkxMi43MTMwMywic3ViIjoiNzc5MDkiLCJzY29wZXMiOlsiKiJdfQ.AZRhXr9hVDezSKlb4oeeb8uFyTl_HdZneTOp26Om1-CzZuCod8J_P9a03eCbSZy7V5UOvNBDaA_43a2aU1MGtgIZYGidNRVtUfvBIcHBVwxf21d3WgB_F2oImZBihrLzglFEcO5vsDPjky2jjqsUuUTxtYPhN0w4v1PnsOmfXUedidrINlqeMLyWYwFIq3JDc_4YmBnKch3NXLoQ6n0CD12a-G0J6dxAys7O8850P2rJxU7I1Yy1eQCMNj8k2b1bnq3VBlRKM3qtKymYsd47tvkpeKyqJ5oXYamYPsqWUEhkSNz7nMQP62lhlJrjd2AUg0ZXawbU_Op5xOVcsx8tdvlAsWUgh2KSEPk4EhFjVRRaOhshFDUNMfCs065bghY4ZZPmUeF5MBwyjqxrhKYuNtxL3TSuQ31N_9rwp1xFfSV2tlZxr54HP_ab9W5YUFWSrDQ8PimXAM2nFOq8YUTpb12XJAOGoLMmYrmZM0jGCmjWPsYs4mLI-xkSRg5-_BLTWn3wQwCcviGSxoSEwdebrvdbPwTFTj_zeOs6hlI6PfmsYsMbCZHxHe_LyDXukAf8TSzPG-cE9iDAJIva2ReFJSTXHH3vt3P6a3KCd4oeMnVFBi7X8sV3TmM8R5wFjP3SSjo7t9-N5kslkiOh-J3aBG9fMA4TkBPPV0bBycVMGqA' };
-    console.log(`BearerToken ${authInfo.token}`)
+    let authInfo = await this.getXizhiyueAuthInfo();
     for (let attempt = 0; attempt <= maxRetries; attempt++) {
       try {
         const requestOptions = {
           ...options,
           headers: {
-            // 'Cookie': authInfo.cookies.map(c => `${c.name}=${c.value}`).join('; '),
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
             'Accept': 'application/json',
             'Authorization': authInfo.token ? `Bearer ${authInfo.token}` : '',
             ...options.headers
           }
         };
-
-        console.log(`开始请求 url: ${url}`);
-        console.log(`请求选项 requestOptions:`, requestOptions);
-
         const response = await fetch(url, requestOptions);
-
-        // 打印 HTTP 状态
-        console.log(`响应状态: ${response.status} ${response.statusText}`);
-
-        // 拿原始文本（保证能看到真实返回）
-        const rawText = await response.text();
-        console.log("响应原始文本:", rawText);
-
-        // 如果认证失败，尝试重新登录
         if (response.status === 401 || response.status === 403) {
           if (attempt < maxRetries) {
             console.log(`认证失效，尝试重新登录 (尝试 ${attempt + 1}/${maxRetries})`);
-            authInfo = await this.getXizhiyueAuthInfo(true); // 强制重新登录
-            continue; // 重试请求
+            authInfo = await this.getXizhiyueAuthInfo(true);
+            continue;
           } else {
             throw new Error(`认证失败: ${response.status} ${response.statusText}`);
           }
         }
-
         if (!response.ok) {
-          throw new Error(`请求失败: ${response.status} ${response.statusText}，返回内容: ${rawText}`);
+            const rawText = await response.text();
+            throw new Error(`请求失败: ${response.status} ${response.statusText}，返回内容: ${rawText}`);
         }
-
-        // 尝试解析 JSON
-        try {
-          const data = JSON.parse(rawText);
-          console.log("解析后的 JSON:", data);
-          return data;
-        } catch (e) {
-          console.warn("返回的不是 JSON，直接返回原始文本");
-          return rawText;
-        }
+        return await response.json();
       } catch (error) {
-        if (attempt === maxRetries) {
-          throw error; // 最后一次尝试仍然失败，抛出错误
-        }
+        if (attempt >= maxRetries) throw error;
         console.log(`请求失败，准备重试: ${error.message}`);
       }
     }
@@ -176,29 +122,21 @@ class WebServer {
   setupMiddleware() {
     // 安全中间件
     this.app.use(helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
-          scriptSrcAttr: ["'unsafe-inline'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://cdn.jsdelivr.net", "https://cdnjs.cloudflare.com"],
-          fontSrc: ["'self'", "https://cdnjs.cloudflare.com"],
-          imgSrc: ["'self'", "data:", "https:"],
-          connectSrc: ["'self'"]
-        }
-      }
+        contentSecurityPolicy: false, // 暂时禁用 CSP 以进行调试
     }));
     this.app.use(cors({
       origin: '*',//process.env.CORS_ORIGIN || 'http://localhost:3000',
       credentials: true
     }));
 
-    // 限流中间件
+    // 限流中间件 (暂时禁用以进行调试)
+    /*
     const limiter = rateLimit({
       windowMs: 15 * 60 * 1000, // 15分钟
       max: 100 // 限制每个IP 15分钟内最多100个请求
     });
     this.app.use(limiter);
+    */
 
     // 解析中间件
     this.app.use(express.json({ limit: '10mb' }));
@@ -240,6 +178,9 @@ class WebServer {
 
     // 夕之悦数据获取路由 - 添加这行
     this.setupFetchXizhiyueData();
+
+    // 库存跟踪路由
+    this.setupInventoryRoutes();
 
     // 前端页面路由
     this.setupPageRoutes();
@@ -1077,6 +1018,10 @@ class WebServer {
 
   // 启动所有活跃的定时任务
   async startAllScheduledTasks() {
+    // 启动内置的每日库存更新任务
+    this.startDailyInventoryUpdateTask();
+    this.startDailyAnalysisTask(); // 添加这行
+
     try {
       const schedules = database.getSchedules();
       const activeSchedules = schedules.filter(schedule => schedule.isActive);
@@ -1089,6 +1034,74 @@ class WebServer {
     } catch (error) {
       console.error('启动定时任务失败:', error);
     }
+  }
+
+  // 启动每日库存更新的内置定时任务
+  startDailyInventoryUpdateTask() {
+    const taskName = 'daily-inventory-update';
+    // 每天凌晨2点执行: '0 2 * * *'
+    const cronExpression = '0 2 * * *';
+
+    if (!cronSvc.validate(cronExpression)) {
+      console.error(`内置库存更新任务的 cron 表达式无效: ${cronExpression}`);
+      return;
+    }
+
+    // 检查任务是否已在运行
+    if (this.scheduledTasks.has(taskName)) {
+        console.log('每日库存更新任务已在运行中。');
+        return;
+    }
+
+    const task = cronSvc.schedule(cronExpression, async () => {
+      console.log('开始执行每日定时库存更新任务...');
+      try {
+        const authInfo = await this.getXizhiyueAuthInfo();
+        await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+        console.log('每日定时库存更新任务成功完成。');
+      } catch (error) {
+        console.error('每日定时库存更新任务执行失败:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: "Asia/Shanghai"
+    });
+
+    this.scheduledTasks.set(taskName, task);
+    console.log(`已启动每日库存更新任务，cron: ${cronExpression}`);
+  }
+
+  // 启动每日库存分析的内置定时任务
+  startDailyAnalysisTask() {
+    const taskName = 'daily-inventory-analysis';
+    // 每天凌晨3点执行: '0 3 * * *'
+    const cronExpression = '0 3 * * *';
+
+    if (!cronSvc.validate(cronExpression)) {
+      console.error(`内置库存分析任务的 cron 表达式无效: ${cronExpression}`);
+      return;
+    }
+
+    if (this.scheduledTasks.has(taskName)) {
+        console.log('每日库存分析任务已在运行中。');
+        return;
+    }
+
+    const task = cronSvc.schedule(cronExpression, async () => {
+      console.log('开始执行每日定时库存分析任务...');
+      try {
+        await analysisService.runInventoryAnalysis();
+        console.log('每日定时库存分析任务成功完成。');
+      } catch (error) {
+        console.error('每日定时库存分析任务执行失败:', error);
+      }
+    }, {
+      scheduled: true,
+      timezone: "Asia/Shanghai"
+    });
+
+    this.scheduledTasks.set(taskName, task);
+    console.log(`已启动每日库存分析任务，cron: ${cronExpression}`);
   }
 
   // 处理并保存商品数据到单表
@@ -1312,6 +1325,664 @@ class WebServer {
     });
   }
 
+  setupInventoryRoutes() {
+    const router = express.Router();
+
+    // 获取所有跟踪的 SKU
+    router.get('/skus', (req, res) => {
+      try {
+        const skus = database.getTrackedSkus();
+        res.json(skus);
+      } catch (error) {
+        res.status(500).json({ error: '获取 SKU 列表失败: ' + error.message });
+      }
+    });
+
+    // 添加或更新一个跟踪的 SKU
+    router.post('/skus', async (req, res) => {
+        const { sku } = req.body;
+        if (!sku) {
+            return res.status(400).json({ error: 'SKU 不能为空' });
+        }
+        try {
+            const authInfo = await this.getXizhiyueAuthInfo();
+            const trackedSku = await inventoryService.addOrUpdateTrackedSku(sku, authInfo.token);
+            if (trackedSku) {
+                res.status(201).json(trackedSku);
+            } else {
+                res.status(404).json({ error: `无法找到 SKU ${sku} 的信息` });
+            }
+        } catch (error) {
+            res.status(500).json({ error: '添加 SKU 失败: ' + error.message });
+        }
+    });
+
+    // 删除一个 SKU
+    router.delete('/skus/:id', (req, res) => {
+      const { id } = req.params;
+      try {
+        // 在删除前检查是否有历史记录
+        const hasHistory = database.hasInventoryHistory(id);
+        if (hasHistory) {
+          // 这是一个软提示，实际删除由 FOREIGN KEY ON DELETE CASCADE 处理
+          // 前端可以根据这个 'hasHistory' 字段来显示不同的确认信息
+        }
+        const success = database.deleteTrackedSku(id);
+        if (success) {
+          res.json({ message: 'SKU 删除成功' });
+        } else {
+          res.status(404).json({ error: '未找到要删除的 SKU' });
+        }
+      } catch (error) {
+        res.status(500).json({ error: '删除 SKU 失败: ' + error.message });
+      }
+    });
+    
+    // 检查特定SKU是否有历史记录
+    router.get('/skus/:id/has-history', (req, res) => {
+        const { id } = req.params;
+        try {
+            const hasHistory = database.hasInventoryHistory(id);
+            res.json({ hasHistory });
+        } catch (error) {
+            res.status(500).json({ error: '检查历史记录失败: ' + error.message });
+        }
+    });
+
+    // 获取特定 SKU 的库存历史
+    router.get('/history/:skuId', (req, res) => {
+        const { skuId } = req.params;
+        try {
+            const data = inventoryService.getInventoryHistoryBySku(skuId);
+            if (data) {
+                res.json(data);
+            } else {
+                res.status(404).json({ error: '未找到该 SKU 的历史记录' });
+            }
+        } catch (error) {
+            res.status(500).json({ error: '获取库存历史失败: ' + error.message });
+        }
+    });
+
+    // 获取特定 SKU 的区域库存历史
+    router.get('/regional-history/:skuId', (req, res) => {
+        const { skuId } = req.params;
+        try {
+            const history = database.getRegionalInventoryHistoryBySkuId(skuId);
+            const skuDetails = database.getTrackedSkus().find(s => s.id == skuId);
+            res.json({
+                history,
+                sku: skuDetails ? skuDetails.sku : 'N/A',
+                product_image: skuDetails ? skuDetails.product_image : null,
+            });
+        } catch (error) {
+            res.status(500).json({ error: '获取区域库存历史失败: ' + error.message });
+        }
+    });
+
+    // 立即触发一次查询
+    router.post('/fetch-now', async (req, res) => {
+        try {
+            const authInfo = await this.getXizhiyueAuthInfo();
+            const results = await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+            // 同时更新 tracked_skus 表中的信息
+            for (const sku of database.getTrackedSkus()) {
+                await inventoryService.addOrUpdateTrackedSku(sku.sku, authInfo.token);
+            }
+            res.json(results);
+        } catch (error) {
+            res.status(500).json({ error: '立即查询失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                res.json(schedule);
+            } else {
+                res.json(null); // 明确返回 null
+            }
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取库存更新定时任务
+    router.get('/schedule', (req, res) => {
+        try {
+            const schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            res.json(schedule);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务失败: ' + error.message });
+        }
+    });
+
+    // 更新库存更新定时任务
+    router.post('/schedule', (req, res) => {
+        const { cron } = req.body;
+        if (!cron || !cronSvc.validate(cron)) {
+            return res.status(400).json({ error: '无效的 cron 表达式' });
+        }
+        try {
+            let schedule = database.getSchedules().find(s => s.name === 'Daily Inventory Update');
+            if (schedule) {
+                // 更新现有任务
+                const updated = database.updateSchedule(schedule.id, { cron });
+                this.stopScheduledTask(schedule.id);
+                this.startScheduledTask(updated);
+                res.json(updated);
+            } else {
+                // 创建新任务
+                const newSchedule = database.saveSchedule({
+                    name: 'Daily Inventory Update',
+                    cron: cron,
+                    configId: null, // 这个任务不与特定配置关联
+                    userId: req.user.id, // 关联当前用户
+                    isActive: 1
+                });
+                this.startScheduledTask(newSchedule);
+                res.status(201).json(newSchedule);
+            }
+        } catch (error) {
+            res.status(500).json({ error: '保存定时任务失败: ' + error.message });
+        }
+    });
+
+    // 获取定时任务执行历史
+    router.get('/schedule/history', (req, res) => {
+        try {
+            const history = database.getScheduledTaskHistory();
+            res.json(history);
+        } catch (error) {
+            res.status(500).json({ error: '获取定时任务历史失败: ' + error.message });
+        }
+    });
+
+    // 手动触发一次分析
+    router.post('/run-analysis', async (req, res) => {
+        try {
+            await analysisService.runInventoryAnalysis();
+            res.json({ message: '库存分析任务已成功触发。' });
+        } catch (error) {
+            res.status(500).json({ error: '手动分析失败: ' + error.message });
+        }
+    });
+
+    // 获取系统配置
+    router.get('/system-configs', (req, res) => {
+        try {
+            const configs = database.getSystemConfigs();
+            res.json(configs);
+        } catch (error) {
+            res.status(500).json({ error: '获取系统配置失败: ' + error.message });
+        }
+    });
+
+    // 更新系统配置
+    router.post('/system-configs', (req, res) => {
+        try {
+            database.updateSystemConfigs(req.body);
+            res.json({ message: '系统配置已更新' });
+        } catch (error) {
+            res.status(500).json({ error: '更新系统配置失败: ' + error.message });
+        }
+    });
+
+    // 获取活跃的预警
+    router.get('/alerts', (req, res) => {
+        try {
+            const alerts = database.getActiveAlerts();
+            res.json(alerts);
+        } catch (error) {
+            res.status(500).json({ error: '获取预警失败: ' + error.message });
+        }
+    });
+
+    this.app.use('/api/inventory', auth.authenticateToken.bind(auth), router);
+  }
 
   setupErrorHandling() {
     // 404处理

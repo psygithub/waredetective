@@ -152,6 +152,9 @@ async function loadDashboard() {
         // 显示最近结果
         displayRecentResults(resultsRes.slice(0, 5));
 
+        // 加载库存预警
+        loadAlerts();
+
     } catch (error) {
         console.error('加载仪表板数据失败:', error);
     }
@@ -1017,6 +1020,50 @@ async function apiRequest(url, method = 'GET', data = null) {
     }
 
     return await response.json();
+}
+
+// 加载库存预警
+async function loadAlerts() {
+    try {
+        const alerts = await apiRequest('/api/inventory/alerts');
+        displayAlerts(alerts);
+    } catch (error) {
+        console.error('加载预警失败:', error);
+        document.getElementById('alertsList').innerHTML = '<p class="text-danger">加载预警失败</p>';
+    }
+}
+
+// 显示库存预警
+function displayAlerts(alerts) {
+    const container = document.getElementById('alertsList');
+
+    if (alerts.length === 0) {
+        container.innerHTML = '<p class="text-muted">暂无库存预警</p>';
+        return;
+    }
+
+    let html = `
+        <div class="list-group">
+    `;
+
+    alerts.forEach(alert => {
+        const details = JSON.parse(alert.details);
+        html += `
+            <div class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                    <h5 class="mb-1">${alert.sku} 在 ${alert.region_name}</h5>
+                    <small>${new Date(alert.created_at).toLocaleString()}</small>
+                </div>
+                <p class="mb-1">
+                    库存消耗过快！在 ${details.days} 天内消耗了 ${details.qtyChange} 件 (从 ${details.startQty} 到 ${details.endQty})。
+                    日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%
+                </p>
+            </div>
+        `;
+    });
+
+    html += '</div>';
+    container.innerHTML = html;
 }
 
 // 退出登录

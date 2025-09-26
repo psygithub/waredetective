@@ -125,7 +125,115 @@ CREATE TABLE IF NOT EXISTS xizhiyue_price_history (
     quantity INTEGER,
     recorded_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );
+
+-- 为库存跟踪功能创建新表
+CREATE TABLE IF NOT EXISTS tracked_skus (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    sku TEXT UNIQUE NOT NULL,
+    product_name TEXT,
+    product_image TEXT,
+    product_id INTEGER,
+    product_sku_id INTEGER,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS inventory_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tracked_sku_id INTEGER NOT NULL,
+    sku TEXT,
+    record_date DATE NOT NULL,
+    qty INTEGER,
+    month_sale INTEGER,
+    product_sales INTEGER,
+    delivery_regions TEXT,
+    product_image TEXT,
+    raw_data TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tracked_sku_id, record_date),
+    FOREIGN KEY (tracked_sku_id) REFERENCES tracked_skus (id) ON DELETE CASCADE
+);
+
+-- 为精细化分析创建新的区域库存历史表
+CREATE TABLE IF NOT EXISTS regional_inventory_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tracked_sku_id INTEGER NOT NULL,
+    sku TEXT NOT NULL,
+    record_date DATE NOT NULL,
+    region_id INTEGER NOT NULL,
+    region_name TEXT,
+    region_code TEXT,
+    qty INTEGER,
+    price TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(tracked_sku_id, record_date, region_id),
+    FOREIGN KEY (tracked_sku_id) REFERENCES tracked_skus (id) ON DELETE CASCADE
+);
+
+-- 创建产品预警表
+CREATE TABLE IF NOT EXISTS product_alerts (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    tracked_sku_id INTEGER NOT NULL,
+    sku TEXT NOT NULL,
+    region_id INTEGER NOT NULL,
+    region_name TEXT,
+    alert_type TEXT NOT NULL, -- e.g., 'FAST_CONSUMPTION'
+    details TEXT, -- JSON with details like consumption rate, timespan etc.
+    status TEXT DEFAULT 'ACTIVE', -- e.g., 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (tracked_sku_id) REFERENCES tracked_skus (id) ON DELETE CASCADE
+);
+
+-- 创建系统配置表
+CREATE TABLE IF NOT EXISTS system_configs (
+    key TEXT PRIMARY KEY,
+    value TEXT
+);
+
 `);
+
+// 数据库迁移逻辑
+function runMigrations() {
+    try {
+        const columns = db.prepare(`PRAGMA table_info(inventory_history)`).all();
+        if (!columns.some(col => col.name === 'month_sale')) {
+            console.log('Running migration: Adding month_sale and product_sales to inventory_history...');
+            db.exec(`
+                ALTER TABLE inventory_history ADD COLUMN month_sale INTEGER;
+                ALTER TABLE inventory_history ADD COLUMN product_sales INTEGER;
+            `);
+            console.log('Migration completed successfully.');
+        }
+        if (!columns.some(col => col.name === 'sku')) {
+            console.log('Running migration: Adding sku to inventory_history...');
+            db.exec('ALTER TABLE inventory_history ADD COLUMN sku TEXT');
+            console.log('Migration for sku completed successfully.');
+        }
+    } catch (error) {
+        if (!error.message.includes('no such table: inventory_history')) {
+            console.error('Migration failed:', error);
+        }
+    }
+
+    try {
+        const columns = db.prepare('PRAGMA table_info(tracked_skus)').all();
+        if (!columns.some(c => c.name === 'product_image')) {
+            db.exec('ALTER TABLE tracked_skus ADD COLUMN product_image TEXT');
+            console.log('Migration: Added product_image to tracked_skus table.');
+        }
+        if (!columns.some(c => c.name === 'updated_at')) {
+            db.exec('ALTER TABLE tracked_skus ADD COLUMN updated_at DATETIME');
+            console.log('Migration: Added updated_at to tracked_skus table.');
+        }
+    } catch (err) {
+        if (!err.message.includes('no such table: tracked_skus')) {
+            console.error('Error migrating tracked_skus:', err);
+        }
+    }
+}
+
+runMigrations();
 
 // 自动插入默认管理员
 function ensureDefaultAdmin() {
@@ -147,7 +255,21 @@ function ensureDefaultAdmin() {
   }
 }
 
+// 初始化系统配置
+function initializeSystemConfigs() {
+    const configs = [
+        { key: 'alert_timespan', value: '7' }, // 默认7天
+        { key: 'alert_threshold', value: '0.5' } // 默认阈值50%
+    ];
+    const stmt = db.prepare('INSERT OR IGNORE INTO system_configs (key, value) VALUES (?, ?)');
+    for (const config of configs) {
+        stmt.run(config.key, config.value);
+    }
+    console.log('系统配置已初始化。');
+}
+
 ensureDefaultAdmin();
+initializeSystemConfigs();
 
 // 用户相关
 function getAllUsers() {
@@ -273,6 +395,20 @@ function getResults(limit = 100, offset = 0) {
       skus: JSON.parse(r.skus),
       regions: JSON.parse(r.regions),
       results: JSON.parse(r.results)
+    }));
+}
+
+function getScheduledTaskHistory(limit = 20) {
+    return db.prepare(`
+        SELECT * FROM results 
+        WHERE isScheduled = 1 
+        ORDER BY createdAt DESC 
+        LIMIT ?
+    `).all(limit).map(r => ({
+        ...r,
+        skus: JSON.parse(r.skus),
+        regions: JSON.parse(r.regions),
+        results: JSON.parse(r.results)
     }));
 }
 function getResultById(id) {
@@ -430,6 +566,149 @@ function updateXizhiyueProduct(skuId, productData) {
   );
 }
 
+// =================================================================
+// 库存跟踪功能相关函数
+// =================================================================
+
+// Tracked SKU related functions
+function getTrackedSkus() {
+    const stmt = db.prepare(`
+        SELECT
+            ts.id,
+            ts.sku,
+            ts.product_name,
+            ts.product_image,
+            ts.product_id,
+            ts.product_sku_id,
+            ts.created_at,
+            ts.updated_at,
+            (SELECT qty FROM inventory_history WHERE tracked_sku_id = ts.id ORDER BY created_at DESC LIMIT 1) as latest_qty,
+            (SELECT month_sale FROM inventory_history WHERE tracked_sku_id = ts.id ORDER BY created_at DESC LIMIT 1) as latest_month_sale,
+            (SELECT created_at FROM inventory_history WHERE tracked_sku_id = ts.id ORDER BY created_at DESC LIMIT 1) as latest_record_time
+        FROM
+            tracked_skus ts
+        ORDER BY
+            ts.created_at DESC
+    `);
+    return stmt.all();
+}
+
+function getTrackedSkuBySku(sku) {
+  return db.prepare('SELECT * FROM tracked_skus WHERE sku = ?').get(sku);
+}
+
+function addTrackedSku(skuData) {
+    const { sku, product_name, product_id, product_sku_id, product_image } = skuData;
+    const stmt = db.prepare(`
+        INSERT INTO tracked_skus (sku, product_name, product_id, product_sku_id, product_image)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(sku) DO UPDATE SET
+            product_name = excluded.product_name,
+            product_id = excluded.product_id,
+            product_sku_id = excluded.product_sku_id,
+            product_image = excluded.product_image,
+            updated_at = CURRENT_TIMESTAMP
+    `);
+    stmt.run(sku, product_name, product_id, product_sku_id, product_image);
+    return getTrackedSkuBySku(sku);
+}
+
+function deleteTrackedSku(id) {
+  // ON DELETE CASCADE 会自动处理 inventory_history 表中的相关记录
+  const stmt = db.prepare('DELETE FROM tracked_skus WHERE id = ?');
+  return stmt.run(id).changes > 0;
+}
+
+// Inventory History related functions
+function getInventoryHistory(tracked_sku_id) {
+    return db.prepare(`
+        SELECT * FROM inventory_history 
+        WHERE tracked_sku_id = ? 
+        ORDER BY record_date ASC
+    `).all(tracked_sku_id);
+}
+
+function saveInventoryRecord(record) {
+    const { tracked_sku_id, sku, record_date, qty, month_sale, product_sales, delivery_regions, product_image, raw_data } = record;
+    const stmt = db.prepare(`
+        INSERT INTO inventory_history (tracked_sku_id, sku, record_date, qty, month_sale, product_sales, delivery_regions, product_image, raw_data)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(tracked_sku_id, record_date) DO UPDATE SET
+            sku = excluded.sku,
+            qty = excluded.qty,
+            month_sale = excluded.month_sale,
+            product_sales = excluded.product_sales,
+            delivery_regions = excluded.delivery_regions,
+            product_image = excluded.product_image,
+            raw_data = excluded.raw_data,
+            created_at = CURRENT_TIMESTAMP
+    `);
+    const info = stmt.run(tracked_sku_id, sku, record_date, qty, month_sale, product_sales, JSON.stringify(delivery_regions), product_image, JSON.stringify(raw_data));
+    return info.lastInsertRowid;
+}
+
+function hasInventoryHistory(tracked_sku_id) {
+    const result = db.prepare('SELECT id FROM inventory_history WHERE tracked_sku_id = ? LIMIT 1').get(tracked_sku_id);
+    return !!result;
+}
+
+function saveRegionalInventoryRecord(record) {
+    const { tracked_sku_id, sku, record_date, region_id, region_name, region_code, qty, price } = record;
+    const stmt = db.prepare(`
+        INSERT INTO regional_inventory_history (tracked_sku_id, sku, record_date, region_id, region_name, region_code, qty, price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(tracked_sku_id, record_date, region_id) DO UPDATE SET
+            qty = excluded.qty,
+            price = excluded.price,
+            created_at = CURRENT_TIMESTAMP
+    `);
+    stmt.run(tracked_sku_id, sku, record_date, region_id, region_name, region_code, qty, price);
+}
+
+function getSystemConfigs() {
+    const rows = db.prepare('SELECT key, value FROM system_configs').all();
+    return rows.reduce((acc, row) => {
+        acc[row.key] = row.value;
+        return acc;
+    }, {});
+}
+
+function getRegionalInventoryHistoryForSku(tracked_sku_id, days) {
+    const date = new Date();
+    date.setDate(date.getDate() - days);
+    const startDate = date.toISOString().split('T')[0];
+    
+    return db.prepare(`
+        SELECT * FROM regional_inventory_history
+        WHERE tracked_sku_id = ? AND record_date >= ?
+        ORDER BY record_date ASC
+    `).all(tracked_sku_id, startDate);
+}
+
+function getRegionalInventoryHistoryBySkuId(skuId) {
+    return db.prepare('SELECT * FROM regional_inventory_history WHERE tracked_sku_id = ? ORDER BY record_date ASC').all(skuId);
+}
+
+function createAlert(alertData) {
+    const { tracked_sku_id, sku, region_id, region_name, alert_type, details } = alertData;
+    const stmt = db.prepare(`
+        INSERT INTO product_alerts (tracked_sku_id, sku, region_id, region_name, alert_type, details, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    `);
+    stmt.run(tracked_sku_id, sku, region_id, region_name, alert_type, details);
+}
+
+function updateSystemConfigs(configs) {
+    const stmt = db.prepare('INSERT OR REPLACE INTO system_configs (key, value) VALUES (?, ?)');
+    for (const key in configs) {
+        stmt.run(key, configs[key]);
+    }
+}
+
+function getActiveAlerts() {
+    return db.prepare("SELECT * FROM product_alerts WHERE status = 'ACTIVE' ORDER BY created_at DESC").all();
+}
+
 
 module.exports = {
   getAllUsers,
@@ -446,6 +725,7 @@ module.exports = {
   saveResult,
   getResults,
   getResultById,
+  getScheduledTaskHistory,
   saveSchedule,
   getSchedules,
   getScheduleById,
@@ -453,5 +733,20 @@ module.exports = {
   deleteSchedule,
   getXizhiyueProductBySkuId,
   updateXizhiyueProduct,
-  createXizhiyueProduct
+  createXizhiyueProduct,
+  // 库存跟踪
+  getTrackedSkus,
+  getTrackedSkuBySku,
+  addTrackedSku,
+  deleteTrackedSku,
+  getInventoryHistory,
+  saveInventoryRecord,
+  hasInventoryHistory,
+  saveRegionalInventoryRecord,
+  getSystemConfigs,
+  updateSystemConfigs,
+  getRegionalInventoryHistoryForSku,
+  createAlert,
+  getRegionalInventoryHistoryBySkuId,
+  getActiveAlerts
 };
