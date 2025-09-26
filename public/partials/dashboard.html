@@ -1,0 +1,87 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">仪表板</h1>
+</div>
+
+<!-- 统计卡片 -->
+<div class="row mb-4">
+    <div class="col-md-3">
+        <div class="card card-stats primary">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-category">总配置数</p>
+                        <h3 class="card-title" id="totalConfigs">0</h3>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-cogs fa-2x text-primary"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stats success">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-category">活跃任务</p>
+                        <h3 class="card-title" id="activeSchedules">0</h3>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-clock fa-2x text-success"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stats warning">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-category">今日执行</p>
+                        <h3 class="card-title" id="todayResults">0</h3>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-chart-line fa-2x text-warning"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card card-stats danger">
+            <div class="card-body">
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <p class="card-category">总用户数</p>
+                        <h3 class="card-title" id="totalUsers">0</h3>
+                    </div>
+                    <div class="icon">
+                        <i class="fas fa-users fa-2x text-danger"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- 最近结果 -->
+<div class="card">
+    <div class="card-header">
+        <h5>最近检测结果</h5>
+    </div>
+    <div class="card-body">
+        <div id="recentResults">加载中...</div>
+    </div>
+</div>
+
+<!-- 库存预警 -->
+<div class="card mt-4">
+    <div class="card-header bg-danger text-white">
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>库存预警</h5>
+    </div>
+    <div class="card-body">
+        <div id="alertsList">加载中...</div>
+    </div>
+</div>

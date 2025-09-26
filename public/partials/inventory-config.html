@@ -1,0 +1,71 @@
+<div class="d-flex justify-content-between flex-wrap flex-md-nowrap align-items-center pt-3 pb-2 mb-3 border-bottom">
+    <h1 class="h2">库存跟踪配置</h1>
+</div>
+
+<div class="card">
+    <div class="card-header">
+        <h3>跟踪的 SKU 列表</h3>
+        <button class="btn btn-primary" id="fetch-now-btn">立即查询所有</button>
+    </div>
+    <div class="card-body">
+        <div class="input-group mb-3">
+            <input type="text" id="sku-input" class="form-control" placeholder="输入要添加的 SKU (用;分隔)">
+            <button class="btn btn-success" id="add-sku-btn">添加 SKU</button>
+        </div>
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th scope="col">图片</th>
+                    <th scope="col">SKU</th>
+                    <th scope="col">最新库存</th>
+                    <th scope="col">月销量</th>
+                    <th scope="col">最后记录时间</th>
+                    <th scope="col">操作</th>
+                </tr>
+            </thead>
+            <tbody id="sku-list-body">
+                <!-- SKU 列表将在这里动态生成 -->
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h3>定时任务与预警配置</h3>
+    </div>
+    <div class="card-body">
+        <div class="mb-3">
+            <label for="cron-input" class="form-label">数据同步 Cron 表达式:</label>
+            <input type="text" id="cron-input" class="form-control">
+            <div class="form-text">
+                示例: '0 2 * * *' (每天凌晨2点), '0 */6 * * *' (每6小时)
+            </div>
+        </div>
+        <button class="btn btn-success" id="save-schedule-btn">保存定时任务</button>
+        <hr>
+        <div class="row">
+            <div class="col-md-6 mb-3">
+                <label for="alert-timespan-input" class="form-label">预警分析时间窗口 (天):</label>
+                <input type="number" id="alert-timespan-input" class="form-control" value="7">
+            </div>
+            <div class="col-md-6 mb-3">
+                <label for="alert-threshold-input" class="form-label">预警阈值 (日均消耗率):</label>
+                <input type="number" id="alert-threshold-input" class="form-control" value="0.5" step="0.01">
+            </div>
+        </div>
+        <button class="btn btn-success" id="save-alert-config-btn">保存预警配置</button>
+        <button class="btn btn-info" id="run-analysis-btn">立即执行一次分析</button>
+    </div>
+</div>
+
+<div class="card mt-4">
+    <div class="card-header">
+        <h3>定时任务执行历史</h3>
+    </div>
+    <div class="card-body">
+        <ul class="list-group" id="schedule-history-list">
+            <!-- 定时任务历史将在这里动态生成 -->
+        </ul>
+    </div>
+</div>
