@@ -52,7 +52,7 @@ class WarehouseDetective {
 
     return {
       cookies: this.authCookies,
-      token: localStorage.getItem('token')
+      token: this.authToken
     };
   }
 
@@ -78,10 +78,10 @@ class WarehouseDetective {
   }
 
   // 从storage获取token
-  getAuthTokenFromStorage() {
+  async getAuthTokenFromStorage() {
     console.log(`12312312321`);
     try {
-      const localStorageData = this.page.evaluate(() => {
+      const localStorageData = await this.page.evaluate(() => {
         let items = {};
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
@@ -90,7 +90,7 @@ class WarehouseDetective {
         return items;
       });
       console.log('LocalStorage:', localStorageData);
-      return this.page.evaluate(() => {
+      return await this.page.evaluate(() => {
         console.log(`localStorage ${JSON.stringify(localStorage)}`);
         return localStorage.getItem('access_token') ||
           localStorage.getItem('im_token') ||
@@ -135,9 +135,9 @@ class WarehouseDetective {
       await this.page.locator('label span').nth(1).click();
       await this.page.getByText('登录/注册').click();
       this.lastLoginTime = Date.now();
-      this.page.waitForTimeout(3000);
+      await this.page.waitForTimeout(3000);
       // 获取token和cookies
-      this.authToken = this.getAuthTokenFromStorage();
+      this.authToken = await this.getAuthTokenFromStorage();
       this.authCookies = await this.page.context().cookies();
       this.lastLoginTime = Date.now();
 

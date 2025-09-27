@@ -1,6 +1,7 @@
 // 全局变量
 let currentUser = null;
 let token = null;
+let sessionCheckInterval = null; // 用于会话检查的定时器
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function () {
@@ -27,6 +28,36 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 
+// 开始会话轮询检查
+function startSessionCheck() {
+    // 先停止任何可能存在的旧定时器
+    stopSessionCheck();
+    
+    sessionCheckInterval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/auth/check-session', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (response.status === 401) {
+                // 如果会话失效，则登出
+                console.log('会话已失效，将自动登出。');
+                logout();
+            }
+        } catch (error) {
+            console.error('会话检查失败:', error);
+            // 可以在这里添加一些网络错误处理逻辑
+        }
+    }, 10000); // 每10秒检查一次
+}
+
+// 停止会话轮询检查
+function stopSessionCheck() {
+    if (sessionCheckInterval) {
+        clearInterval(sessionCheckInterval);
+        sessionCheckInterval = null;
+    }
+}
+
 // 验证token
 async function verifyToken() {
     try {
@@ -43,25 +74,28 @@ async function verifyToken() {
 
 // 初始化页面
 function initializePage() {
+    // 检查用户角色 - 只有管理员可以访问此页面
+    if (currentUser.role !== 'admin') {
+        document.body.innerHTML = ''; // 如果不是管理员，直接清空页面
+        return; // 停止所有后续脚本执行
+    }
+
     // 显示用户信息
     document.getElementById('userInfo').textContent = `${currentUser.username} (${getRoleText(currentUser.role)})`;
-
-    // 如果是超级管理员，显示用户管理菜单
-    if (currentUser.role === 'super_admin') {
-        document.getElementById('userManagementNav').style.display = 'block';
-    }
 
     // 设置导航事件
     setupNavigation();
 
     // 加载仪表板数据
     showSection('dashboard');
+
+    // 启动会话检查
+    startSessionCheck();
 }
 
 // 获取角色文本
 function getRoleText(role) {
     const roleMap = {
-        'super_admin': '超级管理员',
         'admin': '管理员',
         'user': '普通用户'
     };
@@ -137,16 +171,29 @@ async function apiRequest(url, method = 'GET', data = null) {
 
     const response = await fetch(url, options);
 
+    if (response.status === 401) {
+        // 捕获到401错误，立即登出
+        console.log('API请求认证失败，将自动登出。');
+        logout();
+        // 抛出一个错误以中断当前的Promise链
+        throw new Error('会话已失效');
+    }
+
     if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || '请求失败');
     }
 
-    return await response.json();
+    // 检查响应是否为空
+    const text = await response.text();
+    return text ? JSON.parse(text) : {};
 }
 
 // 退出登录
 function logout() {
+    // 停止会话检查
+    stopSessionCheck();
+
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     window.location.href = '/login';

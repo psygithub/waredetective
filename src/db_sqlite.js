@@ -21,6 +21,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT,
   password TEXT,
   role TEXT,
+  session_id TEXT,
   createdAt TEXT,
   isActive INTEGER
 );
@@ -235,6 +236,22 @@ function runMigrations() {
 
 runMigrations();
 
+// 迁移 users 表
+function migrateUsersTable() {
+    try {
+        const columns = db.prepare(`PRAGMA table_info(users)`).all();
+        if (!columns.some(col => col.name === 'session_id')) {
+            console.log('Running migration: Adding session_id to users table...');
+            db.exec(`ALTER TABLE users ADD COLUMN session_id TEXT`);
+            console.log('Migration for users table completed successfully.');
+        }
+    } catch (error) {
+        console.error('Failed to migrate users table:', error);
+    }
+}
+migrateUsersTable();
+
+
 // 自动插入默认管理员
 function ensureDefaultAdmin() {
   const admin = db.prepare('SELECT * FROM users WHERE username = ?').get('admin');
@@ -297,21 +314,20 @@ function createUser(userData) {
   return findUserById(info.lastInsertRowid);
 }
 function updateUser(id, updateData) {
-  const user = findUserById(id);
-  if (!user) return null;
-  const stmt = db.prepare(`
-    UPDATE users SET username = ?, email = ?, password = ?, role = ?, isActive = ?
-    WHERE id = ?
-  `);
-  stmt.run(
-    updateData.username || user.username,
-    updateData.email || user.email,
-    updateData.password || user.password,
-    updateData.role || user.role,
-    updateData.isActive !== undefined ? updateData.isActive : user.isActive,
-    id
-  );
-  return findUserById(id);
+    const user = findUserById(id);
+    if (!user) return null;
+
+    const fields = Object.keys(updateData);
+    if (fields.length === 0) return user;
+
+    const setClause = fields.map(field => `${field} = ?`).join(', ');
+    const values = fields.map(field => updateData[field]);
+    values.push(id);
+
+    const stmt = db.prepare(`UPDATE users SET ${setClause} WHERE id = ?`);
+    stmt.run(...values);
+
+    return findUserById(id);
 }
 function deleteUser(id) {
   const stmt = db.prepare('DELETE FROM users WHERE id = ?');

@@ -230,21 +230,52 @@ class WebServer {
     this.app.get('/api/auth/verify', auth.authenticateToken.bind(auth), (req, res) => {
       res.json({ user: req.user });
     });
+
+    // 检查会话状态 (用于前端轮询)
+    this.app.get('/api/auth/check-session', auth.authenticateToken.bind(auth), (req, res) => {
+      // 如果 authenticateToken 中间件通过，说明会话是有效的
+      res.json({ isValid: true });
+    });
   }
 
   setupUserRoutes() {
-    // 获取所有用户（仅超级管理员）
+    // 获取所有用户（仅管理员）
     this.app.get('/api/users',
       auth.authenticateToken.bind(auth),
-      auth.requireSuperAdmin.bind(auth),
+      auth.requireAdmin.bind(auth),
       (req, res) => {
         try {
-          const users = database.getAllUsers();
+          const users = database.getAllUsers().map(u => {
+            const { password, ...userWithoutPassword } = u;
+            return userWithoutPassword;
+          });
           res.json(users);
         } catch (error) {
           res.status(500).json({ error: error.message });
         }
       }
+    );
+
+    // 创建新用户 (仅管理员)
+    this.app.post('/api/users',
+        auth.authenticateToken.bind(auth),
+        auth.requireAdmin.bind(auth),
+        async (req, res) => {
+            try {
+                const { username, email, password } = req.body;
+                if (!username || !email || !password) {
+                    return res.status(400).json({ error: '用户名、邮箱和密码不能为空' });
+                }
+                if (password.length < 6) {
+                    return res.status(400).json({ error: '密码长度至少6位' });
+                }
+                // 默认创建普通用户
+                const result = await auth.register({ username, email, password, role: 'user' });
+                res.status(201).json(result);
+            } catch (error) {
+                res.status(400).json({ error: error.message });
+            }
+        }
     );
 
     // 获取用户信息
@@ -274,27 +305,34 @@ class WebServer {
           const userId = parseInt(req.params.id);
           const updateData = req.body;
 
-          // 普通用户不能修改角色
-          if (req.user.role !== 'super_admin') {
+          // 普通用户不能修改自己的角色，只有管理员可以
+          if (req.user.role !== 'admin') {
             delete updateData.role;
+          }
+
+          // 如果密码字段存在且不为空，则进行哈希处理
+          if (updateData.password) {
+              const bcrypt = require('bcryptjs');
+              updateData.password = bcrypt.hashSync(updateData.password, 10);
           }
 
           const updatedUser = database.updateUser(userId, updateData);
           if (!updatedUser) {
             return res.status(404).json({ error: '用户不存在' });
           }
-
-          res.json(updatedUser);
+          
+          const { password, ...userWithoutPassword } = updatedUser;
+          res.json(userWithoutPassword);
         } catch (error) {
           res.status(500).json({ error: error.message });
         }
       }
     );
 
-    // 删除用户（仅超级管理员）
+    // 删除用户（仅管理员）
     this.app.delete('/api/users/:id',
       auth.authenticateToken.bind(auth),
-      auth.requireSuperAdmin.bind(auth),
+      auth.requireAdmin.bind(auth),
       (req, res) => {
         try {
           const userId = parseInt(req.params.id);

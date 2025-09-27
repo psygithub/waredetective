@@ -143,13 +143,13 @@
                     <div id="successAlert" class="alert alert-success mt-3" style="display: none;"></div>
 
                     <!-- 默认账户提示 -->
-                    <!-- <div class="alert alert-info mt-3">
+                    <div class="alert alert-info mt-3" style="display: none;">
                         <small>
                             <strong>默认管理员账户:</strong><br>
                             用户名: admin<br>
                             密码: admin123
                         </small>
-                    </div> -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -208,10 +208,10 @@
                     
                     setTimeout(() => {
                         // 根据用户角色跳转
-                        if (data.user.role === 'super_admin' || data.user.role === 'admin') {
-                            window.location.href = '/admin';
+                        if (data.user.role === 'admin') {
+                            window.location.href = '/admin.html';
                         } else {
-                            window.location.href = '/';
+                            window.location.href = '/user.html'; 
                         }
                     }, 1000);
                 } else {
@@ -296,10 +296,15 @@
                         'Authorization': `Bearer ${token}`
                     }
                 })
-                .then(response => {
+                .then(async response => {
                     if (response.ok) {
-                        // 已登录，跳转到主页
-                        window.location.href = '/';
+                        const { user } = await response.json();
+                        // 已登录，根据角色跳转
+                        if (user.role === 'admin') {
+                            window.location.href = '/admin.html';
+                        } else {
+                            window.location.href = '/user.html';
+                        }
                     }
                 })
                 .catch(() => {

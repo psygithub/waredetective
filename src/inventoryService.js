@@ -102,7 +102,50 @@ async function addOrUpdateTrackedSku(sku, token) {
             product_sku_id: productData.product_sku_id,
             product_image: productData.product_image,
         };
-        return db.addTrackedSku(skuData);
+        
+        // 添加或更新 tracked_sku 并获取其完整对象（包括ID）
+        const trackedSku = db.addTrackedSku(skuData);
+        if (!trackedSku) {
+            // 如果添加失败，可能意味着数据库操作出错了
+            console.error(`Failed to add or update tracked SKU for ${sku}`);
+            return null;
+        }
+
+        // 为新添加的 SKU 创建初始库存记录
+        const recordDate = new Date().toISOString().split('T')[0];
+        
+        // 1. 保存主库存记录
+        const summaryRecord = {
+            tracked_sku_id: trackedSku.id,
+            sku: trackedSku.sku,
+            record_date: recordDate,
+            qty: productData.qty,
+            month_sale: productData.month_sale,
+            product_sales: productData.product_sales,
+            delivery_regions: productData.delivery_regions,
+            product_image: productData.product_image,
+            raw_data: productData.raw_data,
+        };
+        db.saveInventoryRecord(summaryRecord);
+
+        // 2. 保存各区域的库存记录
+        if (productData.delivery_regions && Array.isArray(productData.delivery_regions)) {
+            for (const regionData of productData.delivery_regions) {
+                const regionalRecord = {
+                    tracked_sku_id: trackedSku.id,
+                    sku: trackedSku.sku,
+                    record_date: recordDate,
+                    region_id: regionData.delivery_region_id,
+                    region_name: regionData.delivery_region_name,
+                    region_code: regionData.delivery_region_code,
+                    qty: parseInt(regionData.qty, 10) || 0,
+                    price: regionData.product_price,
+                };
+                db.saveRegionalInventoryRecord(regionalRecord);
+            }
+        }
+        
+        return trackedSku;
     }
     return null;
 }

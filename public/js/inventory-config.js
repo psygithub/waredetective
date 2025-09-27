@@ -34,24 +34,63 @@ function renderSkuList(skus) {
     });
 }
 
-document.getElementById('add-sku-btn').addEventListener('click', async () => {
-    const skusInput = document.getElementById('sku-input').value.trim();
-    if (!skusInput) {
+document.getElementById('save-skus-btn').addEventListener('click', async () => {
+    const skusText = document.getElementById('sku-textarea').value.trim();
+    if (!skusText) {
         alert('请输入 SKU');
         return;
     }
 
-    const skus = skusInput.split(';').map(s => s.trim()).filter(s => s);
+    const skus = skusText.split('\n').map(s => s.trim()).filter(s => s);
     if (skus.length === 0) {
         alert('请输入有效的 SKU');
         return;
     }
 
+    // 显示加载指示
+    const saveBtn = document.getElementById('save-skus-btn');
+    saveBtn.disabled = true;
+    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在添加...';
+
+    let successCount = 0;
+    let failCount = 0;
+    let failedSkus = [];
+
     for (const sku of skus) {
-        await apiRequest('/api/inventory/skus', 'POST', { sku });
+        try {
+            const result = await apiRequest('/api/inventory/skus', 'POST', { sku });
+            if (result) { // 假设API成功时返回真值
+                successCount++;
+            } else {
+                failCount++;
+                failedSkus.push(sku);
+            }
+        } catch (error) {
+            failCount++;
+            failedSkus.push(sku);
+            console.error(`添加 SKU ${sku} 失败:`, error);
+        }
     }
 
-    document.getElementById('sku-input').value = '';
+    // 恢复按钮状态
+    saveBtn.disabled = false;
+    saveBtn.innerHTML = '保存';
+
+    // 显示结果
+    let message = `处理完成！\n成功: ${successCount}个\n失败: ${failCount}个`;
+    if (failCount > 0) {
+        message += `\n失败的SKU: ${failedSkus.join(', ')}`;
+    }
+    alert(message);
+
+    // 清空文本域并关闭模态框
+    document.getElementById('sku-textarea').value = '';
+    const modal = bootstrap.Modal.getInstance(document.getElementById('addSkuModal'));
+    if (modal) {
+        modal.hide();
+    }
+    
+    // 刷新列表
     await loadSkus();
 });
 
