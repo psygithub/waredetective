@@ -35,7 +35,9 @@ function startSessionCheck() {
     
     sessionCheckInterval = setInterval(async () => {
         try {
-            const response = await fetch('/api/auth/check-session', {
+            const baseUrl = window.location.origin;
+            const fullUrl = new URL('/api/auth/check-session', baseUrl).href;
+            const response = await fetch(fullUrl, {
                 headers: { 'Authorization': `Bearer ${token}` }
             });
             if (response.status === 401) {
@@ -61,7 +63,9 @@ function stopSessionCheck() {
 // 验证token
 async function verifyToken() {
     try {
-        const response = await fetch('/api/auth/verify', {
+        const baseUrl = window.location.origin;
+        const fullUrl = new URL('/api/auth/verify', baseUrl).href;
+        const response = await fetch(fullUrl, {
             headers: {
                 'Authorization': `Bearer ${token}`
             }
@@ -157,6 +161,9 @@ function loadAndExecuteScript(src) {
 
 // API请求封装
 async function apiRequest(url, method = 'GET', data = null) {
+    const baseUrl = window.location.origin;
+    const fullUrl = new URL(url, baseUrl).href;
+
     const options = {
         method,
         headers: {
@@ -169,7 +176,7 @@ async function apiRequest(url, method = 'GET', data = null) {
         options.body = JSON.stringify(data);
     }
 
-    const response = await fetch(url, options);
+    const response = await fetch(fullUrl, options);
 
     if (response.status === 401) {
         // 捕获到401错误，立即登出

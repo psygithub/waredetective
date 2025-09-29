@@ -650,8 +650,16 @@ class WarehouseDetective {
         console.log('获取图片地址失败:', error.message);
       }
 
+      const productDetails = await page1.evaluate(() => {
+        const product_sku_id = window.PRODUCT_SKU_ID || null;
+        const product_id = window.PRODUCT_ID || null;
+        return { product_sku_id, product_id };
+      });
+
       const items = [{
         sku,
+        product_sku_id: productDetails.product_sku_id,
+        product_id: productDetails.product_id,
         region: region || '全部',
         stock: stockNum || '未找到结果',
         lastUpdated: new Date().toISOString(),

@@ -160,6 +160,8 @@ CREATE TABLE IF NOT EXISTS regional_inventory_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     tracked_sku_id INTEGER NOT NULL,
     sku TEXT NOT NULL,
+    product_sku_id INTEGER,
+    product_id INTEGER,
     record_date DATE NOT NULL,
     region_id INTEGER NOT NULL,
     region_name TEXT,
@@ -196,6 +198,22 @@ CREATE TABLE IF NOT EXISTS system_configs (
 
 // 数据库迁移逻辑
 function runMigrations() {
+    try {
+        const regionalColumns = db.prepare('PRAGMA table_info(regional_inventory_history)').all();
+        if (!regionalColumns.some(c => c.name === 'product_sku_id')) {
+            db.exec('ALTER TABLE regional_inventory_history ADD COLUMN product_sku_id INTEGER');
+            console.log('Migration: Added product_sku_id to regional_inventory_history table.');
+        }
+        if (!regionalColumns.some(c => c.name === 'product_id')) {
+            db.exec('ALTER TABLE regional_inventory_history ADD COLUMN product_id INTEGER');
+            console.log('Migration: Added product_id to regional_inventory_history table.');
+        }
+    } catch (err) {
+        if (!err.message.includes('no such table: regional_inventory_history')) {
+            console.error('Error migrating regional_inventory_history:', err);
+        }
+    }
+
     try {
         const columns = db.prepare(`PRAGMA table_info(inventory_history)`).all();
         if (!columns.some(col => col.name === 'month_sale')) {
@@ -384,6 +402,23 @@ function deleteConfig(id) {
 }
 
 
+// 安全的JSON解析函数
+function safeJsonParse(str, defaultValue = []) {
+    if (!str) return defaultValue;
+    try {
+        // 尝试直接解析
+        const parsed = JSON.parse(str);
+        // 如果解析结果仍然是字符串，说明可能存在双重编码，再次解析
+        if (typeof parsed === 'string') {
+            return JSON.parse(parsed);
+        }
+        return parsed;
+    } catch (e) {
+        // 如果解析失败，返回默认值
+        return defaultValue;
+    }
+}
+
 // 结果相关
 function saveResult(resultData) {
   const stmt = db.prepare(`
@@ -408,9 +443,9 @@ function getResults(limit = 100, offset = 0) {
   return db.prepare('SELECT * FROM results ORDER BY createdAt DESC LIMIT ? OFFSET ?').all(limit, offset)
     .map(r => ({
       ...r,
-      skus: JSON.parse(r.skus),
-      regions: JSON.parse(r.regions),
-      results: JSON.parse(r.results)
+      skus: safeJsonParse(r.skus, []),
+      regions: safeJsonParse(r.regions, []),
+      results: safeJsonParse(r.results, [])
     }));
 }
 
@@ -422,9 +457,9 @@ function getScheduledTaskHistory(limit = 20) {
         LIMIT ?
     `).all(limit).map(r => ({
         ...r,
-        skus: JSON.parse(r.skus),
-        regions: JSON.parse(r.regions),
-        results: JSON.parse(r.results)
+        skus: safeJsonParse(r.skus, []),
+        regions: safeJsonParse(r.regions, []),
+        results: safeJsonParse(r.results, [])
     }));
 }
 function getResultById(id) {
@@ -432,9 +467,9 @@ function getResultById(id) {
   if (!r) return null;
   return {
     ...r,
-    skus: JSON.parse(r.skus),
-    regions: JSON.parse(r.regions),
-    results: JSON.parse(r.results)
+    skus: safeJsonParse(r.skus, []),
+    regions: safeJsonParse(r.regions, []),
+    results: safeJsonParse(r.results, [])
   };
 }
 
@@ -669,16 +704,18 @@ function hasInventoryHistory(tracked_sku_id) {
 }
 
 function saveRegionalInventoryRecord(record) {
-    const { tracked_sku_id, sku, record_date, region_id, region_name, region_code, qty, price } = record;
+    const { tracked_sku_id, sku, product_sku_id, product_id, record_date, region_id, region_name, region_code, qty, price } = record;
     const stmt = db.prepare(`
-        INSERT INTO regional_inventory_history (tracked_sku_id, sku, record_date, region_id, region_name, region_code, qty, price)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO regional_inventory_history (tracked_sku_id, sku, product_sku_id, product_id, record_date, region_id, region_name, region_code, qty, price)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(tracked_sku_id, record_date, region_id) DO UPDATE SET
             qty = excluded.qty,
             price = excluded.price,
+            product_sku_id = excluded.product_sku_id,
+            product_id = excluded.product_id,
             created_at = CURRENT_TIMESTAMP
     `);
-    stmt.run(tracked_sku_id, sku, record_date, region_id, region_name, region_code, qty, price);
+    stmt.run(tracked_sku_id, sku, product_sku_id, product_id, record_date, region_id, region_name, region_code, qty, price);
 }
 
 function getSystemConfigs() {

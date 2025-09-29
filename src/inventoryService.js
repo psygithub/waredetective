@@ -73,6 +73,8 @@ async function fetchAndSaveAllTrackedSkus(token) {
                     const regionalRecord = {
                         tracked_sku_id: trackedSku.id,
                         sku: trackedSku.sku,
+                        product_sku_id: productData.product_sku_id,
+                        product_id: productData.product_id,
                         record_date: recordDate,
                         region_id: regionData.delivery_region_id,
                         region_name: regionData.delivery_region_name,
@@ -134,6 +136,8 @@ async function addOrUpdateTrackedSku(sku, token) {
                 const regionalRecord = {
                     tracked_sku_id: trackedSku.id,
                     sku: trackedSku.sku,
+                    product_sku_id: productData.product_sku_id,
+                    product_id: productData.product_id,
                     record_date: recordDate,
                     region_id: regionData.delivery_region_id,
                     region_name: regionData.delivery_region_name,

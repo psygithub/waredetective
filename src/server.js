@@ -1095,10 +1095,30 @@ class WebServer {
       console.log('开始执行每日定时库存更新任务...');
       try {
         const authInfo = await this.getXizhiyueAuthInfo();
-        await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+        const taskResult = await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
         console.log('每日定时库存更新任务成功完成。');
+        database.saveResult({
+          userId: 1, // System task, assign to admin user
+          configId: null,
+          skus: taskResult.success.map(r => r.sku),
+          regions: [],
+          results: taskResult.success,
+          status: 'completed',
+          isScheduled: true,
+          scheduleId: null, // Built-in task
+        });
       } catch (error) {
         console.error('每日定时库存更新任务执行失败:', error);
+        database.saveResult({
+          userId: 1, // System task, assign to admin user
+          configId: null,
+          skus: [],
+          regions: [],
+          results: [{ error: error.message }],
+          status: 'failed',
+          isScheduled: true,
+          scheduleId: null, // Built-in task
+        });
       }
     }, {
       scheduled: true,
@@ -1130,8 +1150,28 @@ class WebServer {
       try {
         await analysisService.runInventoryAnalysis();
         console.log('每日定时库存分析任务成功完成。');
+        database.saveResult({
+          userId: 1, // System task, assign to admin user
+          configId: null,
+          skus: ['库存分析'],
+          regions: ['N/A'],
+          results: [{ status: 'Completed successfully' }],
+          status: 'completed',
+          isScheduled: true,
+          scheduleId: null, // Built-in task
+        });
       } catch (error) {
         console.error('每日定时库存分析任务执行失败:', error);
+        database.saveResult({
+          userId: 1, // System task, assign to admin user
+          configId: null,
+          skus: ['库存分析'],
+          regions: ['N/A'],
+          results: [{ error: error.message }],
+          status: 'failed',
+          isScheduled: true,
+          scheduleId: null, // Built-in task
+        });
       }
     }, {
       scheduled: true,

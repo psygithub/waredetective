@@ -98,6 +98,8 @@ async function viewResult(resultId) {
                         <thead>
                             <tr>
                                 <th>SKU</th>
+                                <th>Product SKU ID</th>
+                                <th>Product ID</th>
                                 <th>地区</th>
                                 <th>库存</th>
                             </tr>
@@ -106,13 +108,16 @@ async function viewResult(resultId) {
             `;
 
             result.results.forEach(item => {
+                const stockText = item.stock || '未知';
                 html += `
                     <tr>
                         <td>${item.sku}</td>
+                        <td>${item.product_sku_id || '-'}</td>
+                        <td>${item.product_id || '-'}</td>
                         <td>${item.region}</td>
                         <td>
-                            <span class="badge bg-${item.stock.includes('未找到') ? 'danger' : 'success'}">
-                                ${item.stock}
+                            <span class="badge bg-${stockText.includes('未找到') || stockText.includes('未知') ? 'danger' : 'success'}">
+                                ${stockText}
                             </span>
                         </td>
                     </tr>

@@ -165,7 +165,20 @@ async function loadScheduleHistory() {
         history.forEach(item => {
             const li = document.createElement('li');
             li.className = 'list-group-item';
-            const skus = item.skus.join(', ');
+            
+            // Defensive parsing to handle old, double-stringified data
+            let skuArray = [];
+            if (Array.isArray(item.skus)) {
+                skuArray = item.skus;
+            } else if (typeof item.skus === 'string') {
+                try {
+                    skuArray = JSON.parse(item.skus);
+                } catch (e) {
+                    skuArray = [item.skus]; // Fallback for non-JSON strings
+                }
+            }
+
+            const skus = skuArray.join(', ');
             const time = new Date(item.createdAt).toLocaleString();
             li.innerHTML = `<strong>${time}:</strong> 对 ${skus} 的查询已完成，状态: ${item.status}。`;
             scheduleHistoryList.appendChild(li);
