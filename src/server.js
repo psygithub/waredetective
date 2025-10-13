@@ -1019,11 +1019,13 @@ class WebServer {
         console.error(`定时任务执行失败: ${schedule.name} (ID: ${schedule.id})`, error);
 
         // 保存失败状态
+        // 修复：在catch块中安全地访问config
+        const config = database.getConfigById(schedule.configId);
         database.saveResult({
           userId: schedule.userId,
           configId: schedule.configId,
-          skus: config.skus,
-          regions: config.regions,
+          skus: config ? config.skus : [],
+          regions: config ? config.regions : [],
           results: [],
           status: 'failed',
           isScheduled: true,
