@@ -651,7 +651,7 @@ class WebServer {
   setupPageRoutes() {
     this.app.get('/', (req, res) => res.sendFile(path.join(__dirname, '../public/index.html')));
     this.app.get('/login', (req, res) => res.sendFile(path.join(__dirname, '../public/login.html')));
-    this.app.get('/admin', (req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
+    this.app.get('/admin', auth.requireLoginForPage.bind(auth), (req, res) => res.sendFile(path.join(__dirname, '../public/admin.html')));
     this.app.get('/results', (req, res) => res.sendFile(path.join(__dirname, '../public/results.html')));
   }
 

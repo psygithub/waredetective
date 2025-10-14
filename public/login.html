@@ -203,6 +203,8 @@
                 if (response.ok) {
                     localStorage.setItem('token', data.token);
                     localStorage.setItem('user', JSON.stringify(data.user));
+                    // 将 token 存入 cookie 以便进行服务器端页面保护
+                    document.cookie = `token=${data.token};path=/;max-age=86400`; // 有效期1天
                     
                     showSuccess('登录成功！正在跳转...');
                     

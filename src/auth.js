@@ -109,6 +109,36 @@ class AuthService {
     next();
   }
 
+  // 验证页面访问权限中间件，失败则重定向到登录页
+  requireLoginForPage(req, res, next) {
+    let token = null;
+    if (req.headers.cookie) {
+      const cookies = req.headers.cookie.split(';').reduce((acc, cookie) => {
+        const [key, value] = cookie.trim().split('=');
+        acc[key] = value;
+        return acc;
+      }, {});
+      token = cookies['token'];
+    }
+
+    if (!token) {
+      return res.redirect('/login');
+    }
+
+    const decoded = this.verifyToken(token);
+    if (!decoded) {
+      return res.redirect('/login');
+    }
+
+    const user = database.findUserById(decoded.id);
+    if (!user || user.session_id !== decoded.sessionId) {
+      return res.redirect('/login');
+    }
+
+    req.user = decoded;
+    next();
+  }
+
   // 验证管理员权限中间件
   requireAdmin(req, res, next) {
     if (req.user.role !== 'admin') {

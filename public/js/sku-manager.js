@@ -44,6 +44,10 @@ class SkuManager {
         // Clear previous list and pagination
         document.getElementById('systemSkusTableBody').innerHTML = '';
         document.getElementById('skuPagination').innerHTML = '';
+        
+        // Load the first page of system SKUs automatically
+        await this.loadSystemSkus(1);
+
         this.modal.show();
     }
 
