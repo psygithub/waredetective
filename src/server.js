@@ -495,7 +495,9 @@ class WebServer {
     router.get('/regional-history/:skuId', (req, res) => {
         const { skuId } = req.params;
         try {
-            const history = database.getRegionalInventoryHistoryBySkuId(skuId);
+            let history = database.getRegionalInventoryHistoryBySkuId(skuId);
+            // 剔除中国地区的数据
+            history = history.filter(record => record.region_name !== '中国');
             const skuDetails = database.getTrackedSkus().find(s => s.id == skuId);
             res.json({
                 history,
@@ -561,6 +563,8 @@ class WebServer {
     router.get('/pivot-history', (req, res) => {
         try {
             let latestHistory = database.getLatestRegionalInventoryHistory();
+            // 剔除中国地区的数据
+            latestHistory = latestHistory.filter(record => record.region_name !== '中国');
             const userSkuExpiresMap = new Map();
             if (req.user.role !== 'admin') {
                 const userSkus = database.getUserSkus(req.user.id, false);
@@ -575,7 +579,7 @@ class WebServer {
             }
             const allTrackedSkus = database.getTrackedSkus();
             const skuInfoMap = new Map(allTrackedSkus.map(s => [s.sku, {product_name: s.product_name, product_image: s.product_image, id: s.id}]));
-            const allRegions = database.getAllRegions().sort();
+            const allRegions = database.getAllRegions().sort().filter(region => region !== '中国');
             const columns = ['图片', 'SKU', '商品名称', '最新日期', ...allRegions];
             if (req.user.role !== 'admin') {
                 columns.splice(3, 0, '有效日期');
