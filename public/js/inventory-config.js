@@ -1,3 +1,5 @@
+let existingSkus = new Set();
+
 window.initializeSection = async () => {
     await loadSkus();
     await loadSchedule();
@@ -8,6 +10,7 @@ window.initializeSection = async () => {
 async function loadSkus() {
     const skus = await apiRequest('/api/inventory/skus');
     if (skus) {
+        existingSkus = new Set(skus.map(s => s.sku));
         renderSkuList(skus);
     }
 }
@@ -47,6 +50,28 @@ document.getElementById('save-skus-btn').addEventListener('click', async () => {
         return;
     }
 
+    // 在发送API请求前去重
+    const uniqueSkus = [...new Set(skus)];
+    const totalOriginal = skus.length;
+    const totalUnique = uniqueSkus.length;
+
+    if (totalOriginal > totalUnique) {
+        alert(`您输入了 ${totalOriginal} 个SKU，其中包含重复项。将只处理 ${totalUnique} 个唯一的SKU。`);
+    }
+
+    // 过滤掉数据库中已存在的SKU
+    const newSkusToSubmit = uniqueSkus.filter(sku => !existingSkus.has(sku));
+    const skippedCount = totalUnique - newSkusToSubmit.length;
+
+    if (skippedCount > 0) {
+        alert(`${skippedCount} 个SKU因为已存在于跟踪列表中，将被跳过。`);
+    }
+
+    if (newSkusToSubmit.length === 0) {
+        alert('没有新的SKU需要添加。');
+        return;
+    }
+
     // 显示加载指示
     const saveBtn = document.getElementById('save-skus-btn');
     saveBtn.disabled = true;
@@ -56,7 +81,7 @@ document.getElementById('save-skus-btn').addEventListener('click', async () => {
     let failCount = 0;
     let failedSkus = [];
 
-    for (const sku of skus) {
+    for (const sku of newSkusToSubmit) {
         try {
             const result = await apiRequest('/api/inventory/skus', 'POST', { sku });
             if (result) { // 假设API成功时返回真值
