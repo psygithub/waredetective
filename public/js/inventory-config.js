@@ -1,4 +1,4 @@
-let existingSkus = new Set();
+var existingSkus = new Set();
 
 window.initializeSection = async () => {
     await loadSkus();

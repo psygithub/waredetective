@@ -31,6 +31,10 @@ async function loadSkuManagerModule() {
 
 async function loadUserSkusForDropdown() {
     const skuSelect = document.getElementById('sku-select');
+    if (!skuSelect) {
+        console.error('SKU select dropdown #sku-select not found in the DOM.');
+        return;
+    }
     let skus = [];
     try {
         if (currentUser.role === 'admin') {

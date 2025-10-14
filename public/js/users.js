@@ -91,6 +91,22 @@
         if (!userModalEl) return;
 
         const userModal = new bootstrap.Modal(userModalEl);
+
+        // 解决模态框关闭后的焦点和点击问题
+        userModalEl.addEventListener('hidden.bs.modal', () => {
+            // 1. 移除焦点，防止被困在隐藏元素内，解决 aria-hidden 警告
+            if (document.activeElement) {
+                document.activeElement.blur();
+            }
+            // 2. 强制移除可能残留的背景板，解决“需要点击两次”的问题
+            const backdrop = document.querySelector('.modal-backdrop');
+            if (backdrop) {
+                backdrop.remove();
+            }
+            // 3. 确保body的滚动条恢复正常
+            document.body.style.overflow = 'auto';
+        });
+        
         const userForm = document.getElementById('userForm');
         
         if (typeof SkuManager !== 'undefined' && !skuManagerInstance) {
@@ -157,6 +173,12 @@
                     role: document.getElementById('role').value,
                     isActive: document.getElementById('isActive').checked ? 1 : 0,
                 };
+
+                // 当创建新用户时，密码是必需的
+                if (!userId && !userData.password) {
+                    alert('创建新用户时必须提供密码。');
+                    return;
+                }
 
                 if (!userData.password) {
                     delete userData.password;

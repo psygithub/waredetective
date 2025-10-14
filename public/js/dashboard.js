@@ -179,17 +179,23 @@ function showResultDetailModal(result) {
 }
 
 async function loadAlerts() {
+    const container = document.getElementById('alertsList');
+    if (!container) {
+        console.error('Dashboard alerts container #alertsList not found in the DOM.');
+        return;
+    }
     try {
         const alerts = await apiRequest('/api/inventory/alerts');
         displayAlerts(alerts);
     } catch (error) {
         console.error('加载预警失败:', error);
-        document.getElementById('alertsList').innerHTML = '<p class="text-danger">加载预警失败</p>';
+        container.innerHTML = '<p class="text-danger">加载预警失败</p>';
     }
 }
 
 function displayAlerts(alerts) {
     const container = document.getElementById('alertsList');
+    if (!container) return; // Exit if container is not found
 
     if (alerts.length === 0) {
         container.innerHTML = '<p class="text-muted">暂无库存预警</p>';

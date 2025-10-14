@@ -109,7 +109,8 @@
       warehouse-detective
     ```
     *该命令会将当前目录下的 `data`, `output`, `config` 文件夹挂载到容器中，以实现数据持久化。*
-    
+    windows:
+    docker run -d -p 3000:3000 -v D:\Projects\WarehouseDetective\data:/app/data -v D:\Projects\WarehouseDetective\output:/app/output -v D:\Projects\WarehouseDetective\config:/app/config --name warehouse-detective-container warehousedetective-warehouse-detective
     *注意：为方便管理，仍然强烈建议使用 `docker-compose`。*
 
 ## 默认账户
