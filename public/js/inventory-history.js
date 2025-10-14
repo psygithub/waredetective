@@ -1,27 +1,78 @@
 window.initializeSection = async () => {
+    // The sku-manager module is not needed here for now, but this shows how it could be loaded.
+    // await loadSkuManagerModule(); 
     await init();
+    setupEventListeners();
 };
 
 async function init() {
-    const skus = await apiRequest('/api/inventory/skus');
-    const skuSelect = document.getElementById('sku-select');
+    await loadUserSkusForDropdown();
+}
 
-    if (skus && skus.length > 0) {
-        skuSelect.innerHTML = skus.map(sku => `<option value="${sku.id}">${sku.sku} - ${sku.product_name || 'N/A'}</option>`).join('');
-        if (skus[0]) {
-            loadHistoryForSku(skus[0].id);
+// This function is ready for when the SKU manager is needed on this page again.
+async function loadSkuManagerModule() {
+    const container = document.getElementById('sku-manager-placeholder');
+    try {
+        const response = await fetch('/partials/sku-manager.html');
+        if (!response.ok) throw new Error('Failed to load SKU manager HTML');
+        container.innerHTML = await response.text();
+        
+        const script = document.createElement('script');
+        script.src = '/js/sku-manager.js';
+        script.onload = () => {
+            // The SkuManager class is now available globally if needed
+        };
+        document.body.appendChild(script);
+    } catch (error) {
+        console.error("Failed to load SKU manager module:", error);
+        container.innerHTML = '<p class="text-danger">无法加载 SKU 管理器。</p>';
+    }
+}
+
+async function loadUserSkusForDropdown() {
+    const skuSelect = document.getElementById('sku-select');
+    let skus = [];
+    try {
+        if (currentUser.role === 'admin') {
+            // 管理员加载所有 SKU
+            skus = await apiRequest('/api/inventory/skus');
+        } else {
+            // 普通用户加载自己关联的 SKU
+            skus = await apiRequest(`/api/users/${currentUser.id}/skus`);
         }
-    } else {
-        skuSelect.innerHTML = '<option>没有可供选择的 SKU</option>';
-        renderChart([], '');
+
+        if (skus && skus.length > 0) {
+            skuSelect.innerHTML = skus.map(sku => `<option value="${sku.id}">${sku.sku} - ${sku.product_name || 'N/A'}</option>`).join('');
+            if (skus[0]) {
+                loadHistoryForSku(skus[0].id);
+            }
+        } else {
+            if (currentUser.role === 'admin') {
+                skuSelect.innerHTML = '<option>系统中没有 SKU</option>';
+            } else {
+                skuSelect.innerHTML = '<option>您还没有关联任何 SKU</option>';
+            }
+            renderChart([], '');
+        }
+    } catch (error) {
+        console.error("加载SKU失败:", error);
+        skuSelect.innerHTML = '<option>加载SKU失败</option>';
     }
 
-    skuSelect.addEventListener('change', (e) => {
+    skuSelect.onchange = (e) => {
         const skuId = e.target.value;
         if (skuId) {
             loadHistoryForSku(skuId);
         }
-    });
+    };
+}
+
+function setupEventListeners() {
+    // Hide the "Manage My SKUs" button as requested
+    const manageSkusBtn = document.getElementById('manageMySkusBtn');
+    if (manageSkusBtn) {
+        manageSkusBtn.style.display = 'none';
+    }
 }
 
 async function loadHistoryForSku(skuId) {

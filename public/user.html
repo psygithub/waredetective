@@ -30,6 +30,7 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="/libs/chart.umd.min.js"></script>
     <script src="/libs/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script>
@@ -73,19 +74,31 @@
             }
             currentUser = JSON.parse(userStr);
             document.getElementById('userInfo').textContent = `欢迎, ${currentUser.username}`;
-            loadInventoryHistory();
+            loadContent();
             startSessionCheck(); // 启动会话检查
         });
 
-        async function loadInventoryHistory() {
+        async function loadContent() {
             const container = document.getElementById('inventory-history-container');
+            let section = 'inventory-history'; // Default for admin
+            if (currentUser.role === 'user') {
+                section = 'pivot-table'; // User sees pivot table
+            }
+
             try {
-                const response = await fetch('/partials/inventory-history.html');
+                const response = await fetch(`/partials/${section}.html`);
                 if (!response.ok) throw new Error('Failed to load content');
                 container.innerHTML = await response.text();
                 
+                // Ensure pivot-table.js is loaded if needed
+                if (section === 'pivot-table' && !document.querySelector('script[src="/js/pivot-table.js"]')) {
+                    const pivotScript = document.createElement('script');
+                    pivotScript.src = '/js/pivot-table.js';
+                    document.body.appendChild(pivotScript);
+                }
+
                 const script = document.createElement('script');
-                script.src = '/js/inventory-history.js';
+                script.src = `/js/${section}.js`;
                 script.onload = () => {
                     if (typeof window.initializeSection === 'function') {
                         window.initializeSection();
@@ -93,7 +106,7 @@
                 };
                 document.body.appendChild(script);
             } catch (error) {
-                container.innerHTML = '<p class="text-danger">无法加载库存历史数据。</p>';
+                container.innerHTML = `<p class="text-danger">无法加载内容: ${error.message}</p>`;
             }
         }
         

@@ -1,6 +1,17 @@
 window.initializeSection = async () => {
     if (currentUser.role === 'admin') {
+        // Load the modal's HTML into the placeholder
+        const container = document.getElementById('sku-manager-container');
+        if (container) {
+            const response = await fetch('/partials/sku-manager.html');
+            if (response.ok) {
+                container.innerHTML = await response.text();
+            }
+        }
+
+        // Load user data
         await loadUsers();
+        // Set up event listeners once everything is in the DOM
         setupEventListeners();
     } else {
         document.getElementById('usersTableBody').innerHTML = '<tr><td colspan="7">您没有权限查看此内容。</td></tr>';
@@ -27,6 +38,10 @@ function displayUsers(users) {
     }
 
     users.forEach(user => {
+        const manageSkusBtn = user.role === 'user'
+            ? `<button class="btn btn-sm btn-outline-info manage-skus-btn" data-user-id="${user.id}" data-username="${user.username}">关联SKU</button>`
+            : '';
+
         const row = `
             <tr>
                 <td>${user.id}</td>
@@ -37,6 +52,7 @@ function displayUsers(users) {
                 <td>${new Date(user.createdAt).toLocaleString()}</td>
                 <td>
                     <button class="btn btn-sm btn-outline-primary edit-btn" data-user-id="${user.id}">编辑</button>
+                    ${manageSkusBtn}
                     <button class="btn btn-sm btn-outline-danger delete-btn" data-user-id="${user.id}" ${user.id === currentUser.id ? 'disabled' : ''}>删除</button>
                 </td>
             </tr>
@@ -53,21 +69,44 @@ function getRoleClass(role) {
     }
 }
 
+// A variable to hold the SkuManager instance, ensuring it's created only once.
+let skuManagerInstance = null;
+// A flag to ensure event listeners are set up only once.
+let listenersInitialized = false;
+
 function setupEventListeners() {
-    const userModal = new bootstrap.Modal(document.getElementById('userModal'));
+    if (listenersInitialized) {
+        return;
+    }
+
+    const userModalEl = document.getElementById('userModal');
+    if (!userModalEl) return; // Exit if the modal is not in the DOM yet
+
+    const userModal = new bootstrap.Modal(userModalEl);
     const userForm = document.getElementById('userForm');
-    const saveUserBtn = document.getElementById('saveUserBtn');
+    
+    // Initialize SkuManager only when needed and if the class is available
+    if (typeof SkuManager !== 'undefined' && !skuManagerInstance) {
+        skuManagerInstance = new SkuManager();
+    }
 
-    document.getElementById('addUserBtn').addEventListener('click', () => {
-        userForm.reset();
-        document.getElementById('userId').value = '';
-        document.getElementById('userModalLabel').textContent = '添加新用户';
-        userModal.show();
-    });
+    const mainContent = document.querySelector('.main-content');
 
-    document.getElementById('usersTableBody').addEventListener('click', async (event) => {
-        if (event.target.classList.contains('edit-btn')) {
-            const userId = event.target.dataset.userId;
+    mainContent.addEventListener('click', async (event) => {
+        const target = event.target.closest('button'); // More robustly get the button
+        if (!target) return;
+
+        // Add User button
+        if (target.id === 'addUserBtn') {
+            userForm.reset();
+            document.getElementById('userId').value = '';
+            document.getElementById('userModalLabel').textContent = '添加新用户';
+            userModal.show();
+        }
+
+        // Edit User button
+        if (target.classList.contains('edit-btn')) {
+            const userId = target.dataset.userId;
             const user = await apiRequest(`/api/users/${userId}`);
             
             document.getElementById('userId').value = user.id;
@@ -81,8 +120,9 @@ function setupEventListeners() {
             userModal.show();
         }
 
-        if (event.target.classList.contains('delete-btn')) {
-            const userId = event.target.dataset.userId;
+        // Delete User button
+        if (target.classList.contains('delete-btn')) {
+            const userId = target.dataset.userId;
             if (confirm('确定要删除这个用户吗？')) {
                 try {
                     await apiRequest(`/api/users/${userId}`, 'DELETE');
@@ -92,34 +132,46 @@ function setupEventListeners() {
                 }
             }
         }
-    });
 
-    saveUserBtn.addEventListener('click', async () => {
-        const userId = document.getElementById('userId').value;
-        const userData = {
-            username: document.getElementById('username').value,
-            email: document.getElementById('email').value,
-            password: document.getElementById('password').value,
-            role: document.getElementById('role').value,
-            isActive: document.getElementById('isActive').checked ? 1 : 0,
-        };
-
-        if (!userData.password) {
-            delete userData.password; // 如果密码为空，则不更新
-        }
-
-        try {
-            if (userId) {
-                // 更新用户
-                await apiRequest(`/api/users/${userId}`, 'PUT', userData);
+        // Manage SKUs button
+        if (target.classList.contains('manage-skus-btn')) {
+            if (skuManagerInstance) {
+                const userId = target.dataset.userId;
+                const username = target.dataset.username;
+                skuManagerInstance.openForUser(userId, username);
             } else {
-                // 创建用户
-                await apiRequest('/api/users', 'POST', userData);
+                console.error("SkuManager is not initialized.");
             }
-            userModal.hide();
-            loadUsers();
-        } catch (error) {
-            alert('保存用户失败: ' + error.message);
+        }
+
+        // Save User button
+        if (target.id === 'saveUserBtn') {
+            const userId = document.getElementById('userId').value;
+            const userData = {
+                username: document.getElementById('username').value,
+                email: document.getElementById('email').value,
+                password: document.getElementById('password').value,
+                role: document.getElementById('role').value,
+                isActive: document.getElementById('isActive').checked ? 1 : 0,
+            };
+
+            if (!userData.password) {
+                delete userData.password;
+            }
+
+            try {
+                if (userId) {
+                    await apiRequest(`/api/users/${userId}`, 'PUT', userData);
+                } else {
+                    await apiRequest('/api/users', 'POST', userData);
+                }
+                userModal.hide();
+                loadUsers();
+            } catch (error) {
+                alert('保存用户失败: ' + error.message);
+            }
         }
     });
+
+    listenersInitialized = true;
 }
