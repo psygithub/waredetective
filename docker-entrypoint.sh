@@ -2,8 +2,11 @@
 # Exit immediately if a command exits with a non-zero status.
 set -e
 
-# As this script is run as root (the default user), we can change ownership.
-echo "Updating permissions for volume directories..."
+# As this script is run as root (the default user), we can create directories and change ownership.
+echo "Ensuring volume directories exist and have correct permissions..."
+mkdir -p /app/data
+mkdir -p /app/output
+mkdir -p /app/config
 chown -R nextjs:nodejs /app/data
 chown -R nextjs:nodejs /app/output
 chown -R nextjs:nodejs /app/config

@@ -101,9 +101,16 @@
 
 2.  **运行容器**
     ```bash
-    docker run -p 3000:3000 --name warehouse-detective-container warehouse-detective
+    docker run -d -p 3000:3000 \
+      -v $(pwd)/data:/app/data \
+      -v $(pwd)/output:/app/output \
+      -v $(pwd)/config:/app/config \
+      --name warehouse-detective-container \
+      warehouse-detective
     ```
-    *注意：为方便管理，建议使用 `docker-compose`。*
+    *该命令会将当前目录下的 `data`, `output`, `config` 文件夹挂载到容器中，以实现数据持久化。*
+    
+    *注意：为方便管理，仍然强烈建议使用 `docker-compose`。*
 
 ## 默认账户
 
