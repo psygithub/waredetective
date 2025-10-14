@@ -561,18 +561,25 @@ class WebServer {
     router.get('/pivot-history', (req, res) => {
         try {
             let latestHistory = database.getLatestRegionalInventoryHistory();
+            const userSkuExpiresMap = new Map();
             if (req.user.role !== 'admin') {
                 const userSkus = database.getUserSkus(req.user.id, false);
-                const allowedSkuIds = new Set(userSkus.map(s => s.id));
+                const allowedSkuIds = new Set(userSkus.map(s => {
+                    userSkuExpiresMap.set(s.id, s.expires_at);
+                    return s.id;
+                }));
                 latestHistory = latestHistory.filter(record => allowedSkuIds.has(record.tracked_sku_id));
             }
             if (!latestHistory || latestHistory.length === 0) {
                 return res.json({ columns: [], rows: [] });
             }
             const allTrackedSkus = database.getTrackedSkus();
-            const skuInfoMap = new Map(allTrackedSkus.map(s => [s.sku, {product_name: s.product_name, product_image: s.product_image}]));
+            const skuInfoMap = new Map(allTrackedSkus.map(s => [s.sku, {product_name: s.product_name, product_image: s.product_image, id: s.id}]));
             const allRegions = database.getAllRegions().sort();
             const columns = ['图片', 'SKU', '商品名称', '最新日期', ...allRegions];
+            if (req.user.role !== 'admin') {
+                columns.splice(3, 0, '有效日期');
+            }
             const pivotData = {};
             latestHistory.forEach(record => {
                 const sku = record.sku;
@@ -584,6 +591,10 @@ class WebServer {
                         '最新日期': record.record_date,
                         '图片': info.product_image
                     };
+                    if (req.user.role !== 'admin') {
+                        const expires_at = userSkuExpiresMap.get(info.id);
+                        pivotData[sku]['有效日期'] = expires_at ? expires_at.split(' ')[0] : '长期';
+                    }
                 }
                 pivotData[sku][record.region_name] = record.qty;
             });

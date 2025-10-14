@@ -136,9 +136,11 @@ document.getElementById('fetch-now-btn').addEventListener('click', async () => {
 });
 
 async function loadSchedule() {
-    const schedule = await apiRequest('/api/inventory/schedule');
-    if (schedule) {
-        document.getElementById('cron-input').value = schedule.cron;
+    // There might be multiple schedules, for now, we load the first one for simplicity.
+    // A more robust implementation might involve a dropdown or a dedicated management UI.
+    const schedules = await apiRequest('/api/schedules');
+    if (schedules && schedules.length > 0) {
+        document.getElementById('cron-input').value = schedules[0].cron;
     } else {
         document.getElementById('cron-input').value = '0 2 * * *'; // 默认值
     }
@@ -150,10 +152,28 @@ document.getElementById('save-schedule-btn').addEventListener('click', async () 
         alert('请输入 Cron 表达式');
         return;
     }
-    const result = await apiRequest('/api/inventory/schedule', 'POST', { cron });
-    if (result) {
+    // This assumes we are updating the first schedule found or creating a new one.
+    // This logic should be refined if multiple schedules are officially supported in the UI.
+    const schedules = await apiRequest('/api/schedules');
+    const scheduleData = {
+        name: 'Default Inventory Schedule',
+        cron: cron,
+        configId: 1, // Assuming a default configId, this should be made dynamic.
+        isActive: true
+    };
+
+    try {
+        if (schedules && schedules.length > 0) {
+            // Update existing schedule
+            await apiRequest(`/api/schedules/${schedules[0].id}`, 'PUT', scheduleData);
+        } else {
+            // Create new schedule
+            await apiRequest('/api/schedules', 'POST', scheduleData);
+        }
         alert('定时任务已保存');
         loadSchedule();
+    } catch (error) {
+        alert('保存失败: ' + error.message);
     }
 });
 
