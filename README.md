@@ -76,13 +76,13 @@
 
 1.  **构建并启动容器 (使用 Docker Compose)**
     ```bash
-    npm run docker:compose
+    docker-compose up -d
     ```
     该命令会根据 `docker-compose.yml` 自动构建镜像并在后台启动服务。
 
 2.  **停止容器**
     ```bash
-    npm run docker:stop
+    docker-compose down
     ```
 
 3.  **查看日志**
@@ -96,13 +96,14 @@
 
 1.  **构建镜像**
     ```bash
-    npm run docker:build
+    docker build -t warehouse-detective .
     ```
 
 2.  **运行容器**
     ```bash
-    npm run docker:run
+    docker run -p 3000:3000 --name warehouse-detective-container warehouse-detective
     ```
+    *注意：为方便管理，建议使用 `docker-compose`。*
 
 ## 默认账户
 
