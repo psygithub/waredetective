@@ -168,9 +168,45 @@ function getInventoryHistoryBySku(skuId) {
     };
 }
 
+async function fetchSingleSkuById(skuId, token) {
+    const sku = db.getTrackedSkuById(skuId);
+    if (!sku) {
+        throw new Error(`SKU with ID ${skuId} not found.`);
+    }
+    const productData = await fetchInventoryFromAPI(sku.sku, token);
+    if (productData) {
+        const recordDate = new Date().toISOString().split('T')[0];
+        if (productData.delivery_regions && Array.isArray(productData.delivery_regions)) {
+            for (const regionData of productData.delivery_regions) {
+                const regionalRecord = {
+                    tracked_sku_id: sku.id,
+                    sku: sku.sku,
+                    product_sku_id: productData.product_sku_id,
+                    product_id: productData.product_id,
+                    record_date: recordDate,
+                    region_id: regionData.delivery_region_id,
+                    region_name: regionData.delivery_region_name,
+                    region_code: regionData.delivery_region_code,
+                    qty: parseInt(regionData.qty, 10) || 0,
+                    price: regionData.product_price,
+                };
+                db.saveRegionalInventoryRecord(regionalRecord);
+            }
+        }
+        // Update the latest quantity and record time in the main tracked_skus table
+        db.updateTrackedSku(sku.id, { 
+            latest_qty: productData.qty, 
+            latest_record_time: new Date().toISOString() 
+        });
+        return { sku: sku.sku, qty: productData.qty };
+    }
+    return null;
+}
+
 module.exports = {
     fetchInventoryFromAPI,
     fetchAndSaveAllTrackedSkus,
     addOrUpdateTrackedSku,
     getInventoryHistoryBySku,
+    fetchSingleSkuById,
 };

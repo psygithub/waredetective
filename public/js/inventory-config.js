@@ -1,17 +1,24 @@
 var existingSkus = new Set();
 
 window.initializeSection = async () => {
+    document.getElementById('rows-per-page-select').addEventListener('change', () => loadSkus(1));
     await loadSkus();
     await loadSchedule();
     await loadScheduleHistory();
     await loadAlertConfigs();
 };
 
-async function loadSkus() {
-    const skus = await apiRequest('/api/inventory/skus');
-    if (skus) {
-        existingSkus = new Set(skus.map(s => s.sku));
-        renderSkuList(skus);
+let currentPage = 1;
+let rowsPerPage = 20;
+
+async function loadSkus(page = 1) {
+    currentPage = page;
+    rowsPerPage = document.getElementById('rows-per-page-select').value;
+    const response = await apiRequest(`/api/inventory/skus-paginated?page=${page}&limit=${rowsPerPage}`);
+    if (response && response.items) {
+        existingSkus = new Set(response.items.map(s => s.sku));
+        renderSkuList(response.items);
+        renderPagination(response.total, page, rowsPerPage);
     }
 }
 
@@ -28,10 +35,13 @@ function renderSkuList(skus) {
         tr.innerHTML = `
             <td><img src="${sku.product_image || 'https://via.placeholder.com/50'}" alt="${sku.sku}" width="50" height="50"></td>
             <td>${sku.sku}</td>
-            <td>${sku.latest_qty ?? 'N/A'}</td>
+            <td>${sku.latest_qty ?? 'NA'}</td>
             <td>${sku.latest_month_sale ?? 'N/A'}</td>
             <td>${recordTime}</td>
-            <td><button class="btn btn-danger btn-sm" data-id="${sku.id}">删除</button></td>
+            <td>
+                <button class="btn btn-info btn-sm" onclick="querySku(${sku.id})">查询</button>
+                <button class="btn btn-danger btn-sm" data-id="${sku.id}">删除</button>
+            </td>
         `;
         skuListBody.appendChild(tr);
     });
@@ -261,3 +271,41 @@ document.getElementById('run-analysis-btn').addEventListener('click', async () =
         alert(result.message);
     }
 });
+
+async function querySku(skuId) {
+    try {
+        const result = await apiRequest(`/api/inventory/fetch-sku/${skuId}`, 'POST');
+        if (result) {
+            alert(`查询成功: ${result.sku} - 库存: ${result.qty}`);
+            loadSkus(); // 重新加载列表以更新数据
+        }
+    } catch (error) {
+        alert(`查询失败: ${error.message}`);
+    }
+}
+
+function renderPagination(totalItems, currentPage, rowsPerPage) {
+    const paginationContainer = document.getElementById('pagination-controls');
+    if (!paginationContainer) return;
+
+    const totalPages = Math.ceil(totalItems / rowsPerPage);
+    paginationContainer.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    const prevDisabled = currentPage === 1 ? 'disabled' : '';
+    const nextDisabled = currentPage === totalPages ? 'disabled' : '';
+
+    let paginationHTML = `<ul class="pagination">`;
+    paginationHTML += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" onclick="loadSkus(${currentPage - 1})">上一页</a></li>`;
+
+    for (let i = 1; i <= totalPages; i++) {
+        const activeClass = i === currentPage ? 'active' : '';
+        paginationHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="loadSkus(${i})">${i}</a></li>`;
+    }
+
+    paginationHTML += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" onclick="loadSkus(${currentPage + 1})">下一页</a></li>`;
+    paginationHTML += `</ul>`;
+
+    paginationContainer.innerHTML = paginationHTML;
+}

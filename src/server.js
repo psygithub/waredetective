@@ -442,6 +442,23 @@ class WebServer {
             res.status(500).json({ error: '获取 SKU 列表失败: ' + error.message });
         }
     });
+    router.get('/skus-paginated', (req, res) => {
+        try {
+            const { page = 1, limit = 20 } = req.query;
+            const allSkus = database.getTrackedSkus();
+            const startIndex = (page - 1) * limit;
+            const endIndex = page * limit;
+            const paginatedSkus = allSkus.slice(startIndex, endIndex);
+            res.json({
+                items: paginatedSkus,
+                total: allSkus.length,
+                page: parseInt(page),
+                limit: parseInt(limit)
+            });
+        } catch (error) {
+            res.status(500).json({ error: '获取分页 SKU 列表失败: ' + error.message });
+        }
+    });
     router.post('/skus', async (req, res) => {
         const { sku } = req.body;
         if (!sku) return res.status(400).json({ error: 'SKU 不能为空' });
@@ -518,6 +535,21 @@ class WebServer {
             res.json(results);
         } catch (error) {
             res.status(500).json({ error: '立即查询失败: ' + error.message });
+        }
+    });
+
+    router.post('/fetch-sku/:id', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const authInfo = await this.getXizhiyueAuthInfo();
+            const result = await inventoryService.fetchSingleSkuById(id, authInfo.token);
+            if (result) {
+                res.json(result);
+            } else {
+                res.status(404).json({ error: 'SKU not found or failed to fetch.' });
+            }
+        } catch (error) {
+            res.status(500).json({ error: `Failed to fetch SKU: ${error.message}` });
         }
     });
     router.get('/schedule/history', (req, res) => {
@@ -691,15 +723,48 @@ class WebServer {
   }
 
   startScheduledTask(schedule) {
-    // ... (implementation omitted for brevity)
+    if (this.scheduledTasks.has(schedule.id)) {
+        this.stopScheduledTask(schedule.id);
+    }
+    if (cronSvc.validate(schedule.cron)) {
+        const task = cronSvc.schedule(schedule.cron, async () => {
+            console.log(`[${new Date().toLocaleString()}] Running scheduled task: ${schedule.name}`);
+            try {
+                const authInfo = await this.getXizhiyueAuthInfo();
+                await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+                console.log(`Scheduled task ${schedule.name} completed successfully.`);
+            } catch (error) {
+                console.error(`Error running scheduled task ${schedule.name}:`, error);
+            }
+        });
+        this.scheduledTasks.set(schedule.id, task);
+        console.log(`Scheduled task "${schedule.name}" with cron "${schedule.cron}" has been started.`);
+    } else {
+        console.error(`Invalid cron expression for schedule ${schedule.id}: ${schedule.cron}`);
+    }
   }
 
   stopScheduledTask(scheduleId) {
-    // ... (implementation omitted for brevity)
+    const task = this.scheduledTasks.get(scheduleId);
+    if (task) {
+        task.stop();
+        this.scheduledTasks.delete(scheduleId);
+        console.log(`Scheduled task with ID ${scheduleId} has been stopped.`);
+    }
   }
 
   async startAllScheduledTasks() {
-    // ... (implementation omitted for brevity)
+    console.log('Starting all scheduled tasks...');
+    try {
+        const schedules = database.getSchedules();
+        const activeSchedules = schedules.filter(s => s.isActive);
+        console.log(`Found ${activeSchedules.length} active schedules to start.`);
+        for (const schedule of activeSchedules) {
+            this.startScheduledTask(schedule);
+        }
+    } catch (error) {
+        console.error('Failed to start all scheduled tasks:', error);
+    }
   }
 
   startDailyInventoryUpdateTask() {

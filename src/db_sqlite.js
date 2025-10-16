@@ -398,6 +398,14 @@ function getTrackedSkus() {
     return stmt.all();
 }
 function getTrackedSkuBySku(sku) { return db.prepare('SELECT * FROM tracked_skus WHERE sku = ?').get(sku); }
+function getTrackedSkuById(id) { return db.prepare('SELECT * FROM tracked_skus WHERE id = ?').get(id); }
+function updateTrackedSku(id, data) {
+    const fields = Object.keys(data);
+    const setClause = fields.map(field => `${field} = ?`).join(', ');
+    const values = [...Object.values(data), id];
+    const stmt = db.prepare(`UPDATE tracked_skus SET ${setClause} WHERE id = ?`);
+    stmt.run(...values);
+}
 function addTrackedSku(skuData) {
     const { sku, product_name, product_id, product_sku_id, product_image } = skuData;
     const stmt = db.prepare(`INSERT INTO tracked_skus (sku, product_name, product_id, product_sku_id, product_image) VALUES (?, ?, ?, ?, ?) ON CONFLICT(sku) DO UPDATE SET product_name = excluded.product_name, product_id = excluded.product_id, product_sku_id = excluded.product_sku_id, product_image = excluded.product_image, updated_at = CURRENT_TIMESTAMP`);
@@ -472,7 +480,7 @@ module.exports = {
   saveResult, getResults, getResultById, getScheduledTaskHistory,
   saveSchedule, getSchedules, getScheduleById, updateSchedule, deleteSchedule,
   getXizhiyueProductBySkuId, updateXizhiyueProduct, createXizhiyueProduct,
-  getTrackedSkus, getTrackedSkuBySku, addTrackedSku, deleteTrackedSku,
+  getTrackedSkus, getTrackedSkuBySku, addTrackedSku, deleteTrackedSku, getTrackedSkuById, updateTrackedSku,
   getInventoryHistory, saveInventoryRecord, hasInventoryHistory, saveRegionalInventoryRecord,
   getSystemConfigs, updateSystemConfigs, getRegionalInventoryHistoryForSku, createAlert,
   getRegionalInventoryHistoryBySkuId, getLatestRegionalInventoryHistory, getAllRegions, getActiveAlerts,
