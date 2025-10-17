@@ -8,8 +8,8 @@ window.initializeSection = async () => {
     await loadAlertConfigs();
 };
 
-let currentPage = 1;
-let rowsPerPage = 20;
+var currentPage = 1;
+var rowsPerPage = 20;
 
 async function loadSkus(page = 1) {
     currentPage = page;

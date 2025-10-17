@@ -153,7 +153,8 @@ function loadAndExecuteScript(src) {
     script.onload = () => {
         // 可选：执行初始化函数
         if (typeof window.initializeSection === 'function') {
-            window.initializeSection();
+            // 使用 setTimeout 延迟执行，确保 DOM 渲染完成
+            setTimeout(window.initializeSection, 0);
         }
     };
     document.body.appendChild(script);
