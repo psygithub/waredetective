@@ -578,7 +578,11 @@ class WebServer {
     });
     router.post('/system-configs', (req, res) => {
         try {
-            database.updateSystemConfigs(req.body);
+            const { configs } = req.body;
+            if (!configs || typeof configs !== 'object') {
+                return res.status(400).json({ error: '无效的配置数据格式' });
+            }
+            database.updateSystemConfigs(configs);
             res.json({ message: '系统配置已更新' });
         } catch (error) {
             res.status(500).json({ error: '更新系统配置失败: ' + error.message });
