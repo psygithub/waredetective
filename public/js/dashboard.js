@@ -9,18 +9,25 @@ window.initializeSection = async () => {
         ]);
 
         // 更新统计卡片
-        document.getElementById('totalConfigs').textContent = configsRes.length;
-        document.getElementById('activeSchedules').textContent = schedulesRes.filter(s => s.isActive).length;
+        const totalConfigsEl = document.getElementById('totalConfigs');
+        if (totalConfigsEl) totalConfigsEl.textContent = configsRes.length;
+
+        const activeSchedulesEl = document.getElementById('activeSchedules');
+        if (activeSchedulesEl) activeSchedulesEl.textContent = schedulesRes.filter(s => s.isActive).length;
 
         // 计算今日结果
         const today = new Date().toDateString();
         const todayResults = resultsRes.filter(r => new Date(r.createdAt).toDateString() === today);
-        document.getElementById('todayResults').textContent = todayResults.length;
+        const todayResultsEl = document.getElementById('todayResults');
+        if (todayResultsEl) todayResultsEl.textContent = todayResults.length;
 
-        if (currentUser.role === 'super_admin') {
-            document.getElementById('totalUsers').textContent = usersRes.length;
-        } else {
-            document.getElementById('totalUsers').textContent = '-';
+        const totalUsersEl = document.getElementById('totalUsers');
+        if (totalUsersEl) {
+            if (currentUser.role === 'super_admin') {
+                totalUsersEl.textContent = usersRes.length;
+            } else {
+                totalUsersEl.textContent = '-';
+            }
         }
 
         // 显示最近结果
