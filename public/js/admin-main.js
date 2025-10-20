@@ -134,7 +134,12 @@ async function showSection(section) {
         mainContent.innerHTML = html;
 
         // 加载并执行相应的JS模块
-        loadAndExecuteScript(`/js/${section}.js`);
+        await loadAndExecuteScript(`/js/${section}.js`);
+        
+        // 确保在脚本加载后执行初始化函数
+        if (typeof window.initializeSection === 'function') {
+            window.initializeSection();
+        }
     } catch (error) {
         mainContent.innerHTML = `<div class="alert alert-danger">Error loading section: ${section}</div>`;
         console.error(error);
@@ -142,23 +147,28 @@ async function showSection(section) {
 }
 
 function loadAndExecuteScript(src) {
-    // 移除所有之前动态加载的模块脚本
-    document.querySelectorAll('script[data-section-script]').forEach(s => s.remove());
+    return new Promise((resolve, reject) => {
+        // 移除所有之前动态加载的模块脚本
+        document.querySelectorAll('script[data-section-script]').forEach(s => s.remove());
 
-    const script = document.createElement('script');
-    // 添加时间戳作为查询参数以防止浏览器缓存 (cache busting)
-    script.src = `${src}?v=${new Date().getTime()}`;
-    // 添加一个自定义属性来标识这些动态加载的脚本
-    script.dataset.sectionScript = 'true';
-    
-    script.onload = () => {
-        // 可选：执行初始化函数
-        if (typeof window.initializeSection === 'function') {
-            // 使用 setTimeout 延迟执行，确保 DOM 渲染完成
-            setTimeout(window.initializeSection, 0);
-        }
-    };
-    document.body.appendChild(script);
+        const script = document.createElement('script');
+        // 添加时间戳作为查询参数以防止浏览器缓存 (cache busting)
+        script.src = `${src}?v=${new Date().getTime()}`;
+        // 添加一个自定义属性来标识这些动态加载的脚本
+        script.dataset.sectionScript = 'true';
+        
+        script.onload = () => {
+            console.log(`脚本 ${src} 加载完成。`);
+            resolve();
+        };
+        
+        script.onerror = () => {
+            console.error(`脚本 ${src} 加载失败。`);
+            reject(new Error(`Script load error for ${src}`));
+        };
+
+        document.body.appendChild(script);
+    });
 }
 
 // API请求封装
