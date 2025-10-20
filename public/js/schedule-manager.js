@@ -1,17 +1,21 @@
 // Functions for managing schedules
 
 async function loadSchedules() {
+    const container = document.getElementById('schedulesList');
+    if (!container) return; // 如果容器不存在，则不执行任何操作
+
     try {
         const schedules = await apiRequest('/api/schedules');
         displaySchedules(schedules);
     } catch (error) {
         console.error('加载定时任务失败:', error);
-        document.getElementById('schedulesList').innerHTML = '<p class="text-danger">加载定时任务失败</p>';
+        container.innerHTML = '<p class="text-danger">加载定时任务失败</p>';
     }
 }
 
 function displaySchedules(schedules) {
     const container = document.getElementById('schedulesList');
+    if (!container) return; // 如果容器不存在，则不执行任何操作
 
     if (schedules.length === 0) {
         container.innerHTML = '<p class="text-muted">暂无定时任务</p>';

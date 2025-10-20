@@ -3,17 +3,21 @@ window.initializeSection = async () => {
 };
 
 async function loadResults() {
+    const container = document.getElementById('resultsList');
+    if (!container) return; // 如果容器不存在，则不执行任何操作
+
     try {
         const results = await apiRequest('/api/results?limit=50');
         displayResults(results);
     } catch (error) {
         console.error('加载结果失败:', error);
-        document.getElementById('resultsList').innerHTML = '<p class="text-danger">加载结果失败</p>';
+        container.innerHTML = '<p class="text-danger">加载结果失败</p>';
     }
 }
 
 function displayResults(results) {
     const container = document.getElementById('resultsList');
+    if (!container) return; // 如果容器不存在，则不执行任何操作
 
     if (results.length === 0) {
         container.innerHTML = '<p class="text-muted">暂无检测结果</p>';

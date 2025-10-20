@@ -85,20 +85,23 @@ async function executeWithConfig() {
 
 function setupForms() {
     // 快速任务表单
-    document.getElementById('quickTaskForm').addEventListener('submit', async function (e) {
-        e.preventDefault();
+    const quickTaskForm = document.getElementById('quickTaskForm');
+    if (quickTaskForm) {
+        quickTaskForm.addEventListener('submit', async function (e) {
+            e.preventDefault();
 
-        const skusText = document.getElementById('taskSkus').value.trim();
-        const regionsText = document.getElementById('taskRegions').value.trim();
+            const skusText = document.getElementById('taskSkus').value.trim();
+            const regionsText = document.getElementById('taskRegions').value.trim();
 
-        if (!skusText) {
-            alert('请输入SKU');
-            return;
-        }
+            if (!skusText) {
+                alert('请输入SKU');
+                return;
+            }
 
-        const skus = skusText.split('\n').map(s => s.trim()).filter(s => s);
-        const regions = regionsText ? regionsText.split('\n').map(r => r.trim()).filter(r => r) : [];
+            const skus = skusText.split('\n').map(s => s.trim()).filter(s => s);
+            const regions = regionsText ? regionsText.split('\n').map(r => r.trim()).filter(r => r) : [];
 
-        await executeTask(skus, regions);
-    });
+            await executeTask(skus, regions);
+        });
+    }
 }
