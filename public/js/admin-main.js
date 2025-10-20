@@ -142,14 +142,15 @@ async function showSection(section) {
 }
 
 function loadAndExecuteScript(src) {
-    // 移除旧的脚本
-    const oldScript = document.querySelector(`script[src="${src}"]`);
-    if (oldScript) {
-        oldScript.remove();
-    }
+    // 移除所有之前动态加载的模块脚本
+    document.querySelectorAll('script[data-section-script]').forEach(s => s.remove());
 
     const script = document.createElement('script');
-    script.src = src;
+    // 添加时间戳作为查询参数以防止浏览器缓存 (cache busting)
+    script.src = `${src}?v=${new Date().getTime()}`;
+    // 添加一个自定义属性来标识这些动态加载的脚本
+    script.dataset.sectionScript = 'true';
+    
     script.onload = () => {
         // 可选：执行初始化函数
         if (typeof window.initializeSection === 'function') {

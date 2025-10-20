@@ -171,13 +171,16 @@ document.getElementById('fetch-now-btn').addEventListener('click', async () => {
 });
 
 async function loadSchedule() {
+    const cronInput = document.getElementById('cron-input');
+    if (!cronInput) return; // Exit if the element doesn't exist
+
     // There might be multiple schedules, for now, we load the first one for simplicity.
     // A more robust implementation might involve a dropdown or a dedicated management UI.
     const schedules = await apiRequest('/api/schedules');
     if (schedules && schedules.length > 0) {
-        document.getElementById('cron-input').value = schedules[0].cron;
+        cronInput.value = schedules[0].cron;
     } else {
-        document.getElementById('cron-input').value = '0 2 * * *'; // 默认值
+        cronInput.value = '0 2 * * *'; // 默认值
     }
 }
 
