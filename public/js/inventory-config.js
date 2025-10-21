@@ -18,6 +18,20 @@ async function loadSkus(page = 1) {
         existingSkus = new Set(response.items.map(s => s.sku));
         renderSkuList(response.items);
         renderPagination(response.total, page, rowsPerPage);
+        if (response.items.length > 0) {
+            // Automatically load chart for the first SKU in the list
+            loadHistoryForSku(response.items[0].id);
+            // Highlight the first row
+            setTimeout(() => {
+                const firstRow = document.querySelector('#sku-list-body tr');
+                if (firstRow) {
+                    firstRow.classList.add('table-active');
+                }
+            }, 0);
+        } else {
+            // Clear chart if no SKUs
+            renderChart([], '无SKU');
+        }
     }
 }
 
@@ -30,6 +44,8 @@ function renderSkuList(skus) {
     }
     skus.forEach(sku => {
         const tr = document.createElement('tr');
+        tr.style.cursor = 'pointer';
+        tr.dataset.skuId = sku.id;
         const recordTime = sku.latest_record_time ? new Date(sku.latest_record_time).toLocaleString() : 'N/A';
         tr.innerHTML = `
             <td><img src="${sku.product_image || 'https://via.placeholder.com/50'}" alt="${sku.sku}" width="50" height="50"></td>
@@ -38,8 +54,8 @@ function renderSkuList(skus) {
             <td>${sku.latest_month_sale ?? 'N/A'}</td>
             <td>${recordTime}</td>
             <td>
-                <button class="btn btn-info btn-sm" onclick="querySku(${sku.id})">查询</button>
-                <button class="btn btn-danger btn-sm" data-id="${sku.id}">删除</button>
+                <button class="btn btn-info btn-sm query-btn" data-id="${sku.id}">查询</button>
+                <button class="btn btn-danger btn-sm delete-btn" data-id="${sku.id}">删除</button>
             </td>
         `;
         skuListBody.appendChild(tr);
@@ -129,21 +145,43 @@ document.getElementById('save-skus-btn').addEventListener('click', async () => {
 });
 
 document.getElementById('sku-list-body').addEventListener('click', async (e) => {
-    if (e.target.tagName === 'BUTTON' && e.target.dataset.id) {
-        const skuId = e.target.dataset.id;
-        
+    const target = e.target;
+    const tr = target.closest('tr');
+    if (!tr) return;
+
+    const skuId = tr.dataset.skuId;
+
+    // Handle delete button click
+    if (target.classList.contains('delete-btn')) {
+        e.stopPropagation(); // Prevent row click event
         const historyCheck = await apiRequest(`/api/inventory/skus/${skuId}/has-history`);
         let confirmMessage = "确定要删除这个 SKU 吗？";
         if (historyCheck && historyCheck.hasHistory) {
             confirmMessage = "警告：这个 SKU 存在历史库存数据，删除后将一并清除。确定要删除吗？";
         }
-
         if (confirm(confirmMessage)) {
             const result = await apiRequest(`/api/inventory/skus/${skuId}`, 'DELETE');
             if (result) {
-                loadSkus();
+                loadSkus(currentPage); // Reload current page
             }
         }
+        return;
+    }
+
+    // Handle query button click
+    if (target.classList.contains('query-btn')) {
+        e.stopPropagation(); // Prevent row click event
+        querySku(skuId);
+        return;
+    }
+
+    // Handle row click to show chart
+    if (skuId) {
+        // Remove active class from all other rows
+        document.querySelectorAll('#sku-list-body tr').forEach(row => row.classList.remove('table-active'));
+        // Add active class to the clicked row
+        tr.classList.add('table-active');
+        loadHistoryForSku(skuId);
     }
 });
 
@@ -251,7 +289,7 @@ async function querySku(skuId) {
         const result = await apiRequest(`/api/inventory/fetch-sku/${skuId}`, 'POST');
         if (result) {
             alert(`查询成功: ${result.sku} - 库存: ${result.qty}`);
-            loadSkus(); // 重新加载列表以更新数据
+            loadSkus(currentPage); // 重新加载列表以更新数据
         }
     } catch (error) {
         alert(`查询失败: ${error.message}`);
@@ -262,24 +300,159 @@ function renderPagination(totalItems, currentPage, rowsPerPage) {
     const paginationContainer = document.getElementById('pagination-controls');
     if (!paginationContainer) return;
 
+    // Create a dedicated container for links if it doesn't exist, to not overwrite the dropdown
+    let linksContainer = document.getElementById('pagination-links');
+    if (!linksContainer) {
+        linksContainer = document.createElement('div');
+        linksContainer.id = 'pagination-links';
+        paginationContainer.appendChild(linksContainer);
+    }
+
     const totalPages = Math.ceil(totalItems / rowsPerPage);
-    paginationContainer.innerHTML = '';
+    linksContainer.innerHTML = '';
 
     if (totalPages <= 1) return;
 
     const prevDisabled = currentPage === 1 ? 'disabled' : '';
     const nextDisabled = currentPage === totalPages ? 'disabled' : '';
 
-    let paginationHTML = `<ul class="pagination">`;
-    paginationHTML += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" onclick="loadSkus(${currentPage - 1})">上一页</a></li>`;
+    let paginationHTML = `<ul class="pagination mb-0">`; // mb-0 to align with dropdown
+    paginationHTML += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${currentPage - 1})">上一页</a></li>`;
 
-    for (let i = 1; i <= totalPages; i++) {
-        const activeClass = i === currentPage ? 'active' : '';
-        paginationHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="loadSkus(${i})">${i}</a></li>`;
+    // Simplified pagination links logic
+    let startPage = Math.max(1, currentPage - 2);
+    let endPage = Math.min(totalPages, currentPage + 2);
+
+    if (startPage > 1) {
+        paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(1)">1</a></li>`;
+        if (startPage > 2) {
+            paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
     }
 
-    paginationHTML += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" onclick="loadSkus(${currentPage + 1})">下一页</a></li>`;
+    for (let i = startPage; i <= endPage; i++) {
+        const activeClass = i === currentPage ? 'active' : '';
+        paginationHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${i})">${i}</a></li>`;
+    }
+
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+        }
+        paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${totalPages})">${totalPages}</a></li>`;
+    }
+
+    paginationHTML += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${currentPage + 1})">下一页</a></li>`;
     paginationHTML += `</ul>`;
 
-    paginationContainer.innerHTML = paginationHTML;
+    linksContainer.innerHTML = paginationHTML;
+}
+
+// --- Chart Functions Migrated from inventory-history.js ---
+
+async function loadHistoryForSku(skuId) {
+    const data = await apiRequest(`/api/inventory/regional-history/${skuId}`);
+    const productImage = document.getElementById('product-image');
+    const chartSkuName = document.getElementById('chart-sku-name');
+
+    if (data) {
+        chartSkuName.textContent = `SKU: ${data.sku}`;
+        renderChart(data.history, data.sku);
+        if (data.product_image) {
+            productImage.src = data.product_image;
+            productImage.style.display = 'block';
+        } else {
+            productImage.style.display = 'none';
+        }
+    } else {
+        chartSkuName.textContent = '选择一个 SKU 查看历史记录';
+        productImage.style.display = 'none';
+        renderChart([], '');
+    }
+}
+
+function renderChart(historyData, skuName) {
+    const chartCanvas = document.getElementById('inventory-chart');
+    const regionCheckboxes = document.getElementById('region-checkboxes');
+    let inventoryChart = Chart.getChart(chartCanvas);
+    if (inventoryChart) {
+        inventoryChart.destroy();
+    }
+
+    if (!historyData || historyData.length === 0) {
+        const ctx = chartCanvas.getContext('2d');
+        ctx.clearRect(0, 0, chartCanvas.width, chartCanvas.height);
+        ctx.textAlign = 'center';
+        ctx.fillText('暂无该 SKU 的历史数据', chartCanvas.width / 2, chartCanvas.height / 2);
+        regionCheckboxes.innerHTML = '';
+        return;
+    }
+
+    const historyByRegion = historyData.reduce((acc, record) => {
+        const region = record.region_name || '未知区域';
+        if (!acc[region]) {
+            acc[region] = [];
+        }
+        acc[region].push({ x: record.record_date, y: record.qty });
+        return acc;
+    }, {});
+
+    const datasets = Object.keys(historyByRegion).map((region, index) => {
+        const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'];
+        return {
+            label: region,
+            data: historyByRegion[region],
+            borderColor: colors[index % colors.length],
+            backgroundColor: colors[index % colors.length] + '33', // Add alpha for fill
+            tension: 0.1,
+            fill: false,
+        };
+    });
+
+    inventoryChart = new Chart(chartCanvas, {
+        type: 'line',
+        data: { datasets },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    type: 'time',
+                    time: {
+                        unit: 'day',
+                        tooltipFormat: 'yyyy-MM-dd',
+                    },
+                    title: { display: true, text: '日期' }
+                },
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: '库存数量' }
+                }
+            },
+            plugins: {
+                legend: { display: false },
+                tooltip: {
+                    callbacks: {
+                        title: (context) => `日期: ${context[0].label}`,
+                        label: (context) => `${context.dataset.label}: ${context.parsed.y} 件`,
+                    }
+                }
+            }
+        }
+    });
+
+    // Render checkboxes
+    regionCheckboxes.innerHTML = datasets.map((ds, i) => `
+        <div class="form-check form-check-inline">
+            <input class="form-check-input" type="checkbox" id="region-${i}" value="${ds.label}" checked>
+            <label class="form-check-label" for="region-${i}" style="color: ${ds.borderColor};">${ds.label}</label>
+        </div>
+    `).join('');
+
+    regionCheckboxes.querySelectorAll('input').forEach((checkbox, index) => {
+        checkbox.addEventListener('change', () => {
+            inventoryChart.setDatasetVisibility(index, checkbox.checked);
+            inventoryChart.update();
+        });
+    });
 }
