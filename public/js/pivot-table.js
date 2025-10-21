@@ -24,8 +24,9 @@
             }
 
             let columns = data.columns;
-            const rows = data.rows;
+            let rows = data.rows;
             let sortableInstance = null;
+            let sortState = {}; // To track sorting state { column: 'colName', order: 'asc' | 'desc' }
 
             function initSortable() {
                 if (sortableInstance) {
@@ -46,7 +47,18 @@
 
             function renderTable() {
                 // Render header
-                tableHead.innerHTML = `<tr>${columns.map(col => `<th>${col}</th>`).join('')}</tr>`;
+                const nonSortableColumns = ['图片', 'SKU', '商品名称', '最新日期', '有效日期'];
+                const headerHtml = columns.map(col => {
+                    if (nonSortableColumns.includes(col)) {
+                        return `<th>${col}</th>`;
+                    }
+                    let sortIndicator = '';
+                    if (sortState.column === col) {
+                        sortIndicator = sortState.order === 'asc' ? '&nbsp;<i class="fas fa-sort-up"></i>' : '&nbsp;<i class="fas fa-sort-down"></i>';
+                    }
+                    return `<th title="${col}" style="cursor: pointer;">${col.charAt(0)}${sortIndicator}</th>`;
+                }).join('');
+                tableHead.innerHTML = `<tr>${headerHtml}</tr>`;
 
                 // Render body
                 tableBody.innerHTML = rows.map(row => {
@@ -65,6 +77,39 @@
 
                 // Re-initialize sortable after rendering
                 initSortable();
+                addSortListeners();
+            }
+
+            function addSortListeners() {
+                const headers = tableHead.querySelectorAll('th');
+                headers.forEach((header, index) => {
+                    const columnName = columns[index];
+                    const nonSortableColumns = ['图片', 'SKU', '商品名称', '最新日期', '有效日期'];
+                    if (!nonSortableColumns.includes(columnName)) {
+                        header.addEventListener('click', () => sortTable(columnName));
+                        new bootstrap.Tooltip(header);
+                    }
+                });
+            }
+
+            function sortTable(columnName) {
+                const currentSort = sortState.column === columnName && sortState.order === 'asc' ? 'desc' : 'asc';
+                
+                rows.sort((a, b) => {
+                    const valA = a[columnName] === null ? -1 : a[columnName];
+                    const valB = b[columnName] === null ? -1 : b[columnName];
+
+                    if (valA < valB) {
+                        return currentSort === 'asc' ? -1 : 1;
+                    }
+                    if (valA > valB) {
+                        return currentSort === 'asc' ? 1 : -1;
+                    }
+                    return 0;
+                });
+
+                sortState = { column: columnName, order: currentSort };
+                renderTable();
             }
 
             renderTable();

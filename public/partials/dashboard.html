@@ -66,20 +66,61 @@
     </div>
 </div>
 
-<!-- 最近结果 -->
-<div class="card">
+<!-- 预警配置 -->
+<div class="card mt-4">
     <div class="card-header">
-        <h5>最近检测结果</h5>
+        <h5><i class="fas fa-cog me-2"></i>预警配置</h5>
     </div>
     <div class="card-body">
-        <div id="recentResults">加载中...</div>
+        <div class="alert alert-info" role="alert">
+            <h5 class="alert-heading">预警规则说明</h5>
+            <p>当一个产品的“日均消耗率”超过您设定的“预警阈值”，并且其“日均消耗量”也大于设定的“最小日消耗量”时，系统才会生成预警。</p>
+            <hr>
+            <p class="mb-1"><strong>计算公式:</strong></p>
+            <pre class="mb-2"><code>日均消耗率 = (消耗掉的库存 / 期初总库存) / 分析天数</code></pre>
+            <pre class="mb-2"><code>日均消耗量 = 消耗掉的库存 / 分析天数</code></pre>
+            <p class="mt-2 mb-1"><strong>示例:</strong></p>
+            <ul>
+                <li><strong>场景:</strong> 一个产品在 <strong>7</strong> 天内，库存从 <strong>100</strong> 件降至 <strong>80</strong> 件。</li>
+                <li><strong>计算:</strong>
+                    <ul>
+                        <li>日均消耗率 = (20 / 100) / 7 ≈ <strong>0.028</strong></li>
+                        <li>日均消耗量 = 20 / 7 ≈ <strong>2.86</strong> 件</li>
+                    </ul>
+                </li>
+                <li><strong>结论:</strong> 如果预警阈值设为 <strong>0.02</strong>，最小日消耗量设为 <strong>3</strong>，尽管消耗率 <code>0.028</code> 超过了阈值 <code>0.02</code>，但由于日消耗量 <code>2.86</code> 未达到 <code>3</code>，所以<strong>不会</strong>产生预警。</li>
+            </ul>
+        </div>
+        <div class="row">
+            <div class="col-md-4 mb-3">
+                <label for="alert-cron-input" class="form-label">预警分析 Cron 表达式:</label>
+                <input type="text" id="alert-cron-input" class="form-control">
+                <div class="form-text">
+                    示例: '0 3 * * *' (每天凌晨3点)
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="alert-timespan-input" class="form-label">预警分析时间窗口 (天):</label>
+                <input type="number" id="alert-timespan-input" class="form-control" value="7">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="alert-threshold-input" class="form-label">预警阈值 (日均消耗率):</label>
+                <input type="number" id="alert-threshold-input" class="form-control" value="0.5" step="0.01">
+            </div>
+            <div class="col-md-4 mb-3">
+                <label for="alert-min-daily-consumption-input" class="form-label">最小日消耗量:</label>
+                <input type="number" id="alert-min-daily-consumption-input" class="form-control" value="1" step="0.1">
+            </div>
+        </div>
+        <button class="btn btn-success" id="save-alert-config-btn">保存预警配置</button>
+        <button class="btn btn-info" id="run-analysis-btn">立即执行一次分析</button>
     </div>
 </div>
 
 <!-- 库存预警 -->
 <div class="card mt-4">
     <div class="card-header bg-danger text-white">
-        <h5><i class="fas fa-exclamation-triangle me-2"></i>库存预警</h5>
+        <h5><i class="fas fa-exclamation-triangle me-2"></i>库存预警列表</h5>
     </div>
     <div class="card-body">
         <div id="alertsList">加载中...</div>

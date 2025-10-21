@@ -30,160 +30,20 @@ window.initializeSection = async () => {
             }
         }
 
-        // 显示最近结果
-        displayRecentResults(resultsRes.slice(0, 5));
-
         // 加载库存预警
         loadAlerts();
+        // 加载预警配置
+        loadAlertConfigs();
+
+        // 绑定预警配置事件
+        document.getElementById('save-alert-config-btn').addEventListener('click', saveAlertConfig);
+        document.getElementById('run-analysis-btn').addEventListener('click', runAnalysis);
+
 
     } catch (error) {
         console.error('加载仪表板数据失败:', error);
     }
 };
-
-function displayRecentResults(results) {
-    const container = document.getElementById('recentResults');
-
-    if (results.length === 0) {
-        container.innerHTML = '<p class="text-muted">暂无检测结果</p>';
-        return;
-    }
-
-    let html = `
-        <div class="table-responsive">
-            <table class="table table-sm">
-                <thead>
-                    <tr>
-                        <th>时间</th>
-                        <th>SKU数量</th>
-                        <th>结果数量</th>
-                        <th>状态</th>
-                        <th>操作</th>
-                    </tr>
-                </thead>
-                <tbody>
-    `;
-
-    results.forEach(result => {
-        html += `
-            <tr>
-                <td>${new Date(result.createdAt).toLocaleString()}</td>
-                <td>${Array.isArray(result.skus) ? result.skus.length : 1}</td>
-                <td>${Array.isArray(result.results) ? result.results.length : 0}</td>
-                <td>
-                    <span class="badge bg-${result.status === 'completed' ? 'success' : 'warning'}">
-                        ${result.status === 'completed' ? '完成' : '进行中'}
-                    </span>
-                </td>
-                <td>
-                    <button class="btn btn-sm btn-outline-info" onclick="viewRecentResultDetail(${result.id})">
-                        <i class="fas fa-eye"></i> 查看详情
-                    </button>
-                </td>
-            </tr>
-        `;
-    });
-
-    html += '</tbody></table></div>';
-    container.innerHTML = html;
-}
-
-async function viewRecentResultDetail(resultId) {
-    try {
-        const result = await apiRequest(`/api/results/${resultId}`);
-        showResultDetailModal(result);
-    } catch (error) {
-        alert('加载结果详情失败: ' + error.message);
-    }
-}
-
-function showResultDetailModal(result) {
-    let html = `
-        <div class="modal fade" id="recentResultDetailModal" tabindex="-1">
-            <div class="modal-dialog modal-lg">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">检测结果详情</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <div class="row mb-3">
-                            <div class="col-md-6">
-                                <strong>检测时间:</strong> ${new Date(result.createdAt).toLocaleString()}
-                            </div>
-                            <div class="col-md-6">
-                                <strong>状态:</strong> 
-                                <span class="badge bg-${result.status === 'completed' ? 'success' : 'warning'}">
-                                    ${result.status === 'completed' ? '完成' : '进行中'}
-                                </span>
-                            </div>
-                        </div>
-    `;
-
-    if (result.results && result.results.length > 0) {
-        html += `
-            <div class="table-responsive">
-                <table class="table table-sm">
-                    <thead>
-                        <tr>
-                            <th>图片</th>
-                            <th>链接</th>
-                            <th>SKU</th>
-                            <th>地区</th>
-                            <th>库存</th>
-                            <th>检测时间</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-        `;
-        result.results.forEach(item => {
-            html += `
-                <tr>
-                    <td>
-                        <img src="${item.img}" alt="商品图片" style="max-width:80px;max-height:80px;">
-                    </td>
-                    <td>
-                        <a href="${item.url}" target="_blank" rel="noopener noreferrer">链接</a>
-                    </td>
-                    <td>${item.sku}</td>
-                    <td>${item.region}</td>
-                    <td>
-                        <span class="badge ${(item.stock && item.stock.includes('未找到')) ? 'bg-danger' : 'bg-success'}">
-                            ${item.stock ?? '无数据'}
-                        </span>
-                    </td>
-                    <td>${new Date(item.lastUpdated || item.createdAt).toLocaleString()}</td>
-                </tr>
-            `;
-        });
-        html += '</tbody></table></div>';
-    } else {
-        html += '<p class="text-muted">暂无结果数据</p>';
-    }
-
-    html += `
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-
-    // 移除已存在的模态框
-    const existingModal = document.getElementById('recentResultDetailModal');
-    if (existingModal) {
-        existingModal.remove();
-    }
-
-    // 添加新模态框
-    document.body.insertAdjacentHTML('beforeend', html);
-
-    // 显示模态框
-    const modal = new bootstrap.Modal(document.getElementById('recentResultDetailModal'));
-    modal.show();
-}
 
 async function loadAlerts() {
     const container = document.getElementById('alertsList');
@@ -231,4 +91,72 @@ function displayAlerts(alerts) {
 
     html += '</div>';
     container.innerHTML = html;
+}
+
+async function loadAlertConfigs() {
+    const configs = await apiRequest('/api/inventory/system-configs');
+    if (configs) {
+        document.getElementById('alert-timespan-input').value = configs.alert_timespan || '7';
+        document.getElementById('alert-threshold-input').value = configs.alert_threshold || '0.5';
+        document.getElementById('alert-min-daily-consumption-input').value = configs.alert_min_daily_consumption || '1';
+    }
+
+    const schedules = await apiRequest('/api/schedules');
+    const alertSchedule = schedules.find(s => s.name === 'Alert Analysis Schedule');
+    if (alertSchedule) {
+        document.getElementById('alert-cron-input').value = alertSchedule.cron;
+    } else {
+        document.getElementById('alert-cron-input').value = '0 3 * * *'; // 默认值
+    }
+}
+
+async function saveAlertConfig() {
+    // 保存预警参数
+    const configs = {
+        alert_timespan: document.getElementById('alert-timespan-input').value,
+        alert_threshold: document.getElementById('alert-threshold-input').value,
+        alert_min_daily_consumption: document.getElementById('alert-min-daily-consumption-input').value,
+    };
+    await apiRequest('/api/inventory/system-configs', 'POST', { configs });
+
+    // 保存定时任务
+    const cron = document.getElementById('alert-cron-input').value.trim();
+    if (!cron) {
+        alert('请输入预警分析的 Cron 表达式');
+        return;
+    }
+
+    const schedules = await apiRequest('/api/schedules');
+    const alertSchedule = schedules.find(s => s.name === 'Alert Analysis Schedule');
+    
+    const scheduleData = {
+        name: 'Alert Analysis Schedule',
+        cron: cron,
+        task_type: 'run_analysis', // 指定任务类型
+        isActive: true
+    };
+
+    try {
+        if (alertSchedule) {
+            await apiRequest(`/api/schedules/${alertSchedule.id}`, 'PUT', scheduleData);
+        } else {
+            await apiRequest('/api/schedules', 'POST', scheduleData);
+        }
+        alert('预警配置已保存');
+    } catch (error) {
+        alert('保存定时任务失败: ' + error.message);
+    }
+}
+
+async function runAnalysis() {
+    if (!confirm('立即执行一次库存分析吗？这可能需要一些时间。')) {
+        return;
+    }
+    try {
+        const result = await apiRequest('/api/inventory/run-analysis', 'POST');
+        alert(result.message);
+        loadAlerts(); // 刷新预警列表
+    } catch (error) {
+        alert('执行分析失败: ' + error.message);
+    }
 }

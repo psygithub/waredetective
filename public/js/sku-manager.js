@@ -55,21 +55,14 @@ class SkuManager {
         document.getElementById('querySkuBtn').addEventListener('click', async () => {
             const skuValue = document.getElementById('manualSkuInput').value.trim();
             document.getElementById('manualSkuResult').innerHTML = ''; // Clear previous messages
-            if (!skuValue) {
-                document.getElementById('manualSkuResult').innerHTML = `<div class="text-info">请输入SKU进行查询。</div>`;
-                document.getElementById('systemSkusTableBody').innerHTML = '';
-                document.getElementById('skuPagination').innerHTML = '';
-                return;
-            }
+            // If input is empty, search for all SKUs.
             await this.loadSystemSkus(1, skuValue);
         });
 
         document.getElementById('selectedSkusContainer').addEventListener('click', (event) => {
             if (event.target.classList.contains('remove-sku-btn')) {
                 const skuId = parseInt(event.target.dataset.skuId);
-                if (this.userSkus.has(skuId)) {
-                    return;
-                }
+                // Allow direct removal from the selected list
                 this.selectedSkus.delete(skuId);
                 this.renderSelectedSkus();
                 this.updateSystemSkusTable();
@@ -169,8 +162,10 @@ class SkuManager {
         container.innerHTML = '';
         this.selectedSkus.forEach((sku, id) => {
             const expiresText = sku.expires_at ? new Date(sku.expires_at).toLocaleDateString() : '长期有效';
+            // Use a different color for newly added SKUs vs. already saved ones.
+            const badgeClass = this.userSkus.has(id) ? 'bg-success' : 'bg-primary';
             const tag = `
-                <span class="badge ${this.userSkus.has(id) ? 'bg-secondary' : 'bg-primary'} d-flex align-items-center">
+                <span class="badge ${badgeClass} d-flex align-items-center">
                     <span class="py-1">${sku.sku} (${expiresText})</span>
                     <button type="button" class="btn-close btn-close-white ms-2 remove-sku-btn" aria-label="Close" data-sku-id="${id}"></button>
                 </span>

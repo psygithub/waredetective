@@ -5,7 +5,6 @@ window.initializeSection = async () => {
     await loadSkus();
     await loadSchedule();
     await loadScheduleHistory();
-    await loadAlertConfigs();
 };
 
 var currentPage = 1;
@@ -246,34 +245,6 @@ async function loadScheduleHistory() {
     }
 }
 
-async function loadAlertConfigs() {
-    const configs = await apiRequest('/api/inventory/system-configs');
-    if (configs) {
-        document.getElementById('alert-timespan-input').value = configs.alert_timespan || '7';
-        document.getElementById('alert-threshold-input').value = configs.alert_threshold || '0.5';
-    }
-}
-
-document.getElementById('save-alert-config-btn').addEventListener('click', async () => {
-    const configs = {
-        alert_timespan: document.getElementById('alert-timespan-input').value,
-        alert_threshold: document.getElementById('alert-threshold-input').value,
-    };
-    const result = await apiRequest('/api/inventory/system-configs', 'POST', { configs });
-    if (result) {
-        alert('预警配置已保存');
-    }
-});
-
-document.getElementById('run-analysis-btn').addEventListener('click', async () => {
-    if (!confirm('立即执行一次库存分析吗？这可能需要一些时间。')) {
-        return;
-    }
-    const result = await apiRequest('/api/inventory/run-analysis', 'POST');
-    if (result) {
-        alert(result.message);
-    }
-});
 
 async function querySku(skuId) {
     try {

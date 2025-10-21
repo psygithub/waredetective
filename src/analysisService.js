@@ -3,8 +3,9 @@ const db = require('./db_sqlite');
 async function runInventoryAnalysis() {
     console.log('开始执行库存消耗分析...');
     const configs = db.getSystemConfigs();
-    const timespan = parseInt(configs.alert_timespan, 10);
-    const threshold = parseFloat(configs.alert_threshold);
+    const timespan = parseInt(configs.alert_timespan || '7', 10);
+    const threshold = parseFloat(configs.alert_threshold || '0.5');
+    const minDailyConsumption = parseFloat(configs.alert_min_daily_consumption || '1');
 
     const skus = db.getTrackedSkus();
     for (const sku of skus) {
@@ -32,12 +33,15 @@ async function runInventoryAnalysis() {
 
             if (days > 0 && qtyChange > 0) {
                 const consumptionRate = (qtyChange / firstRecord.qty) / days;
-                
-                if (consumptionRate > threshold) {
+                const dailyConsumption = qtyChange / days;
+
+                if (consumptionRate > threshold && dailyConsumption > minDailyConsumption) {
                     const alertDetails = {
                         timespan,
                         threshold,
+                        minDailyConsumption,
                         consumptionRate,
+                        dailyConsumption,
                         qtyChange,
                         days,
                         startQty: firstRecord.qty,
@@ -51,7 +55,7 @@ async function runInventoryAnalysis() {
                         alert_type: 'FAST_CONSUMPTION',
                         details: JSON.stringify(alertDetails),
                     });
-                    console.log(`预警: SKU ${sku.sku} 在 ${firstRecord.region_name} 消耗过快!`);
+                    console.log(`预警: SKU ${sku.sku} 在 ${firstRecord.region_name} 消耗过快! 日均消耗率: ${consumptionRate.toFixed(3)}, 日均消耗量: ${dailyConsumption.toFixed(2)}`);
                 }
             }
         }

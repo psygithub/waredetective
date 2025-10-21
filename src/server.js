@@ -374,9 +374,9 @@ class WebServer {
   setupScheduleRoutes() {
     this.app.post('/api/schedules', auth.authenticateToken.bind(auth), (req, res) => {
         try {
-            const { name, cron, configId, isActive = true } = req.body;
+            const { name, cron, configId, isActive = true, task_type = 'fetch_inventory' } = req.body;
             if (!cronSvc.validate(cron)) return res.status(400).json({ error: '无效的cron表达式' });
-            const scheduleData = { name, cron, configId, userId: req.user.id, isActive };
+            const scheduleData = { name, cron, configId, userId: req.user.id, isActive, task_type };
             const newSchedule = database.saveSchedule(scheduleData);
             if (isActive) this.startScheduledTask(newSchedule);
             res.status(201).json(newSchedule);
@@ -732,10 +732,18 @@ class WebServer {
     }
     if (cronSvc.validate(schedule.cron)) {
         const task = cronSvc.schedule(schedule.cron, async () => {
-            console.log(`[${new Date().toLocaleString()}] Running scheduled task: ${schedule.name}`);
+            console.log(`[${new Date().toLocaleString()}] Running scheduled task: ${schedule.name} (Type: ${schedule.task_type})`);
             try {
-                const authInfo = await this.getXizhiyueAuthInfo();
-                await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+                switch (schedule.task_type) {
+                    case 'run_analysis':
+                        await analysisService.runInventoryAnalysis();
+                        break;
+                    case 'fetch_inventory':
+                    default:
+                        const authInfo = await this.getXizhiyueAuthInfo();
+                        await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+                        break;
+                }
                 console.log(`Scheduled task ${schedule.name} completed successfully.`);
             } catch (error) {
                 console.error(`Error running scheduled task ${schedule.name}:`, error);
