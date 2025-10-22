@@ -1,5 +1,5 @@
 var existingSkus = new Set();
-let alertsBySkuId = {};
+var alertsBySkuId = {};
 
 window.initializeSection = async () => {
     document.getElementById('rows-per-page-select').addEventListener('change', () => loadSkus(1));
@@ -47,6 +47,15 @@ async function loadSkus(page = 1) {
     }
 }
 
+function getBadgeForLevel(level) {
+    switch (level) {
+        case 3: return '<span class="badge rounded-pill bg-danger ms-2">高危</span>';
+        case 2: return '<span class="badge rounded-pill bg-warning ms-2">中危</span>';
+        case 1: return '<span class="badge rounded-pill bg-info ms-2">低危</span>';
+        default: return '';
+    }
+}
+
 function renderSkuList(skus) {
     const skuListBody = document.getElementById('sku-list-body');
     skuListBody.innerHTML = '';
@@ -58,11 +67,17 @@ function renderSkuList(skus) {
         const tr = document.createElement('tr');
         tr.style.cursor = 'pointer';
         tr.dataset.skuId = sku.id;
-        const hasAlerts = alertsBySkuId[sku.id] && alertsBySkuId[sku.id].length > 0;
+        
+        const alerts = alertsBySkuId[sku.id];
+        let highestAlertLevel = 0;
+        if (alerts && alerts.length > 0) {
+            highestAlertLevel = Math.max(...alerts.map(a => a.alert_level));
+        }
+
         const recordTime = sku.latest_record_time ? new Date(sku.latest_record_time).toLocaleString() : 'N/A';
         tr.innerHTML = `
             <td><img src="${sku.product_image || 'https://via.placeholder.com/50'}" alt="${sku.sku}" width="50" height="50"></td>
-            <td>${sku.sku} ${hasAlerts ? '<span class="badge rounded-pill bg-danger ms-2">预警</span>' : ''}</td>
+            <td>${sku.sku} ${getBadgeForLevel(highestAlertLevel)}</td>
             <td>${sku.latest_qty ?? 'NA'}</td>
             <td>${sku.latest_month_sale ?? 'N/A'}</td>
             <td>${recordTime}</td>
@@ -366,13 +381,13 @@ function toggleAlertRow(skuId, parentTr) {
             const detailTd = document.createElement('td');
             detailTd.colSpan = "6"; // Span all columns
             
-            const alertContent = alertsForSku.map(alert => {
+            const alertContent = alertsForSku.sort((a, b) => b.alert_level - a.alert_level).map(alert => {
                 const details = JSON.parse(alert.details);
-                return `<p class="mb-1"><strong>${alert.region_name}:</strong> 库存消耗过快！在 ${details.days} 天内消耗了 ${details.qtyChange} 件 (从 ${details.startQty} 到 ${details.endQty})。</p>`;
+                return `<p class="mb-1">${getBadgeForLevel(alert.alert_level)} <strong>${alert.region_name}:</strong> 库存消耗过快！在 ${details.days} 天内消耗了 ${details.qtyChange} 件 (从 ${details.startQty} 到 ${details.endQty})。</p>`;
             }).join('');
 
             detailTd.innerHTML = `
-                <div class="alert alert-warning mb-0">
+                <div class="alert alert-light mb-0">
                     <h6 class="alert-heading">预警详情</h6>
                     ${alertContent}
                 </div>

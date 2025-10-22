@@ -4,8 +4,13 @@ async function runInventoryAnalysis(trackedSkuId = null) {
     let newAlertsCount = 0;
     const configs = db.getSystemConfigs();
     const timespan = parseInt(configs.alert_timespan || '7', 10);
-    const threshold = parseFloat(configs.alert_threshold || '0.5');
-    const minDailyConsumption = parseFloat(configs.alert_min_daily_consumption || '1');
+    
+    // Load all config values for grading
+    const minConsumption = parseFloat(configs.alert_min_daily_consumption || '5');
+    const maxConsumption = parseFloat(configs.alert_max_daily_consumption || '20');
+    const baseThreshold = parseFloat(configs.alert_threshold || '0.03');
+    const mediumMultiplier = parseFloat(configs.alert_medium_threshold_multiplier || '1.5');
+    const mediumThreshold = baseThreshold * mediumMultiplier;
 
     let skusToAnalyze;
     if (trackedSkuId) {
@@ -43,12 +48,22 @@ async function runInventoryAnalysis(trackedSkuId = null) {
             if (days > 0 && qtyChange > 0) {
                 const consumptionRate = (qtyChange / firstRecord.qty) / days;
                 const dailyConsumption = qtyChange / days;
+                
+                let alertLevel = 0;
 
-                if (consumptionRate > threshold && dailyConsumption > minDailyConsumption) {
+                if (dailyConsumption > maxConsumption && consumptionRate > baseThreshold) {
+                    alertLevel = 3; // High Severity
+                } else if (dailyConsumption >= minConsumption) {
+                    if (consumptionRate > mediumThreshold) {
+                        alertLevel = 2; // Medium Severity
+                    } else if (consumptionRate > baseThreshold) {
+                        alertLevel = 1; // Low Severity
+                    }
+                }
+
+                if (alertLevel > 0) {
                     const alertDetails = {
                         timespan,
-                        threshold,
-                        minDailyConsumption,
                         consumptionRate,
                         dailyConsumption,
                         qtyChange,
@@ -62,10 +77,11 @@ async function runInventoryAnalysis(trackedSkuId = null) {
                         region_id: regionId,
                         region_name: firstRecord.region_name,
                         alert_type: 'FAST_CONSUMPTION',
+                        alert_level: alertLevel,
                         details: JSON.stringify(alertDetails),
                     });
                     newAlertsCount++;
-                    console.log(`预警: SKU ${sku.sku} 在 ${firstRecord.region_name} 消耗过快! 日均消耗率: ${consumptionRate.toFixed(3)}, 日均消耗量: ${dailyConsumption.toFixed(2)}`);
+                    console.log(`预警 (等级 ${alertLevel}): SKU ${sku.sku} 在 ${firstRecord.region_name} 消耗过快! 日均消耗率: ${consumptionRate.toFixed(3)}, 日均消耗量: ${dailyConsumption.toFixed(2)}`);
                 }
             }
         }

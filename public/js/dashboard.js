@@ -5,7 +5,7 @@ window.initializeSection = async () => {
             apiRequest('/api/configs'),
             apiRequest('/api/schedules'),
             apiRequest('/api/results?limit=10'),
-            currentUser.role === 'super_admin' ? apiRequest('/api/users') : Promise.resolve([])
+            (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? apiRequest('/api/users') : Promise.resolve([])
         ]);
 
         // 更新统计卡片
@@ -23,7 +23,7 @@ window.initializeSection = async () => {
 
         const totalUsersEl = document.getElementById('totalUsers');
         if (totalUsersEl) {
-            if (currentUser.role === 'super_admin') {
+            if (currentUser.role === 'admin' || currentUser.role === 'super_admin') {
                 totalUsersEl.textContent = usersRes.length;
             } else {
                 totalUsersEl.textContent = '-';
@@ -97,8 +97,10 @@ async function loadAlertConfigs() {
     const configs = await apiRequest('/api/inventory/system-configs');
     if (configs) {
         document.getElementById('alert-timespan-input').value = configs.alert_timespan || '7';
-        document.getElementById('alert-threshold-input').value = configs.alert_threshold || '0.5';
-        document.getElementById('alert-min-daily-consumption-input').value = configs.alert_min_daily_consumption || '1';
+        document.getElementById('alert-threshold-input').value = configs.alert_threshold || '0.03';
+        document.getElementById('alert-min-daily-consumption-input').value = configs.alert_min_daily_consumption || '5';
+        document.getElementById('alert-max-daily-consumption-input').value = configs.alert_max_daily_consumption || '20';
+        document.getElementById('alert-medium-threshold-multiplier-input').value = configs.alert_medium_threshold_multiplier || '1.5';
     }
 
     const schedules = await apiRequest('/api/schedules');
@@ -116,6 +118,8 @@ async function saveAlertConfig() {
         alert_timespan: document.getElementById('alert-timespan-input').value,
         alert_threshold: document.getElementById('alert-threshold-input').value,
         alert_min_daily_consumption: document.getElementById('alert-min-daily-consumption-input').value,
+        alert_max_daily_consumption: document.getElementById('alert-max-daily-consumption-input').value,
+        alert_medium_threshold_multiplier: document.getElementById('alert-medium-threshold-multiplier-input').value,
     };
     await apiRequest('/api/inventory/system-configs', 'POST', { configs });
 

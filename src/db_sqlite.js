@@ -181,6 +181,7 @@ CREATE TABLE IF NOT EXISTS product_alerts (
     region_id INTEGER NOT NULL,
     region_name TEXT,
     alert_type TEXT NOT NULL, -- e.g., 'FAST_CONSUMPTION'
+    alert_level INTEGER DEFAULT 1, -- 1: Low, 2: Medium, 3: High
     details TEXT, -- JSON with details like consumption rate, timespan etc.
     status TEXT DEFAULT 'ACTIVE', -- e.g., 'ACTIVE', 'ACKNOWLEDGED', 'RESOLVED'
     created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -444,9 +445,29 @@ function getLatestRegionalInventoryHistory() {
 }
 function getAllRegions() { return db.prepare('SELECT DISTINCT region_name FROM regional_inventory_history WHERE region_name IS NOT NULL').all().map(r => r.region_name); }
 function createAlert(alertData) {
-    const { tracked_sku_id, sku, region_id, region_name, alert_type, details } = alertData;
-    const stmt = db.prepare(`INSERT INTO product_alerts (tracked_sku_id, sku, region_id, region_name, alert_type, details, updated_at) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`);
-    stmt.run(tracked_sku_id, sku, region_id, region_name, alert_type, details);
+    const { tracked_sku_id, sku, region_id, region_name, alert_type, details, alert_level } = alertData;
+    // First, check if an active alert of the same type, for the same sku and region already exists.
+    const existingAlert = db.prepare(`
+        SELECT id FROM product_alerts 
+        WHERE tracked_sku_id = ? AND region_id = ? AND alert_type = ? AND status = 'ACTIVE'
+    `).get(tracked_sku_id, region_id, alert_type);
+
+    if (existingAlert) {
+        // If it exists, update it with the new level and details
+        const stmt = db.prepare(`
+            UPDATE product_alerts 
+            SET alert_level = ?, details = ?, updated_at = CURRENT_TIMESTAMP 
+            WHERE id = ?
+        `);
+        stmt.run(alert_level, details, existingAlert.id);
+    } else {
+        // If it doesn't exist, insert a new one
+        const stmt = db.prepare(`
+            INSERT INTO product_alerts (tracked_sku_id, sku, region_id, region_name, alert_type, details, alert_level, updated_at) 
+            VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+        `);
+        stmt.run(tracked_sku_id, sku, region_id, region_name, alert_type, details, alert_level);
+    }
 }
 function updateSystemConfigs(configs) {
     const stmt = db.prepare('INSERT OR REPLACE INTO system_configs (key, value) VALUES (?, ?)');
