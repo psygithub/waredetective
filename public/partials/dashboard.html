@@ -78,7 +78,7 @@
             <hr>
             <p class="mb-1"><strong>预警级别判断逻辑:</strong></p>
             <ul>
-                <li><strong>3级 (高危)</strong>: <code>日均消耗量</code> > <code>高危日消耗量</code> 且 <code>日均消耗率</code> > <code>基础消耗率阈值</code>。</li>
+                <li><strong>3级 (高危)</strong>: <code>日均消耗量</code> > <code>高危日消耗量</code>。</li>
                 <li><strong>2级 (中危)</strong>: <code>日均消耗量</code> 在区间内，且 <code>日均消耗率</code> > <code>基础消耗率阈值</code> * <code>中级预警倍数</code>。</li>
                 <li><strong>1级 (低危)</strong>: <code>日均消耗量</code> 在区间内，且 <code>日均消耗率</code> > <code>基础消耗率阈值</code>。</li>
             </ul>
@@ -129,6 +129,8 @@
         <h5><i class="fas fa-exclamation-triangle me-2"></i>库存预警列表</h5>
     </div>
     <div class="card-body">
-        <div id="alertsList">加载中...</div>
+        <div style="max-height: 400px; overflow-y: auto;">
+            <div id="alertsList">加载中...</div>
+        </div>
     </div>
 </div>

@@ -60,6 +60,15 @@ async function loadAlerts() {
     }
 }
 
+function getBadgeForLevel(level) {
+    switch (level) {
+        case 3: return '<span class="badge bg-danger ms-2">高危</span>';
+        case 2: return '<span class="badge bg-warning ms-2">中危</span>';
+        case 1: return '<span class="badge bg-info ms-2">低危</span>';
+        default: return '';
+    }
+}
+
 function displayAlerts(alerts) {
     const container = document.getElementById('alertsList');
     if (!container) return; // Exit if container is not found
@@ -75,10 +84,17 @@ function displayAlerts(alerts) {
 
     alerts.forEach(alert => {
         const details = JSON.parse(alert.details);
+        let itemClass = 'list-group-item-action';
+        switch (alert.alert_level) {
+            case 3: itemClass += ' list-group-item-danger'; break;
+            case 2: itemClass += ' list-group-item-warning'; break;
+            case 1: itemClass += ' list-group-item-info'; break;
+        }
+
         html += `
-            <div class="list-group-item list-group-item-action">
+            <div class="list-group-item ${itemClass}">
                 <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">${alert.sku} 在 ${alert.region_name}</h5>
+                    <h5 class="mb-1">${alert.sku} 在 ${alert.region_name} ${getBadgeForLevel(alert.alert_level)}</h5>
                     <small>${new Date(alert.created_at).toLocaleString()}</small>
                 </div>
                 <p class="mb-1">

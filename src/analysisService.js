@@ -51,8 +51,8 @@ async function runInventoryAnalysis(trackedSkuId = null) {
                 
                 let alertLevel = 0;
 
-                if (dailyConsumption > maxConsumption && consumptionRate > baseThreshold) {
-                    alertLevel = 3; // High Severity
+                if (dailyConsumption > maxConsumption) {
+                    alertLevel = 3; // High Severity: Consumption volume is the only factor
                 } else if (dailyConsumption >= minConsumption) {
                     if (consumptionRate > mediumThreshold) {
                         alertLevel = 2; // Medium Severity

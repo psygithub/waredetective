@@ -475,7 +475,9 @@ function updateSystemConfigs(configs) {
         stmt.run(key, configs[key]);
     }
 }
-function getActiveAlerts() { return db.prepare("SELECT * FROM product_alerts WHERE status = 'ACTIVE' ORDER BY created_at DESC").all(); }
+function getActiveAlerts(limit = 100) { 
+    return db.prepare("SELECT * FROM product_alerts WHERE status = 'ACTIVE' ORDER BY created_at DESC, alert_level DESC LIMIT ?").all(limit); 
+}
 
 function getUserSkus(userId, isAdmin = false) {
     let query = `SELECT ts.*, us.expires_at FROM tracked_skus ts JOIN user_sku us ON ts.id = us.tracked_sku_id WHERE us.user_id = ?`;
