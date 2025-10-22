@@ -340,7 +340,22 @@
     </div>
 
     <!-- 模态框容器 -->
-    <div id="modal-container"></div>
+    <div id="modal-container">
+        <!-- 任务历史模态框 -->
+        <div class="modal fade" id="scheduleHistoryModal" tabindex="-1" aria-labelledby="scheduleHistoryModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="scheduleHistoryModalLabel">任务执行历史</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body" id="scheduleHistoryBody">
+                        <!-- 历史记录将在这里加载 -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>

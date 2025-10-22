@@ -52,6 +52,9 @@ function displaySchedules(schedules) {
                     <button class="btn btn-sm btn-outline-primary" onclick="editSchedule(${schedule.id})">
                         <i class="fas fa-edit"></i> 编辑
                     </button>
+                    <button class="btn btn-sm btn-outline-info" onclick="showScheduleHistory(${schedule.id})">
+                        <i class="fas fa-history"></i> 查看历史
+                    </button>
                     <button class="btn btn-sm btn-outline-danger" onclick="deleteSchedule(${schedule.id})">
                         <i class="fas fa-trash"></i> 删除
                     </button>
@@ -153,5 +156,41 @@ async function deleteSchedule(scheduleId) {
         loadSchedules();
     } catch (error) {
         alert('删除定时任务失败: ' + error.message);
+    }
+}
+
+async function showScheduleHistory(scheduleId) {
+    try {
+        const history = await apiRequest(`/api/inventory/schedule/history?schedule_id=${scheduleId}`);
+        const modalElement = document.getElementById('scheduleHistoryModal');
+        const modalBody = document.getElementById('scheduleHistoryBody');
+        
+        if (!modalElement || !modalBody) {
+            console.error('历史记录模态框不存在');
+            return;
+        }
+
+        if (history.length === 0) {
+            modalBody.innerHTML = '<p>暂无执行历史</p>';
+        } else {
+            let html = '<ul class="list-group">';
+            history.forEach(record => {
+                html += `
+                    <li class="list-group-item">
+                        <strong>执行时间:</strong> ${new Date(record.run_time).toLocaleString()}<br>
+                        <strong>状态:</strong> <span class="badge bg-${record.status === 'completed' ? 'success' : 'danger'}">${record.status}</span><br>
+                        <strong>详情:</strong> <pre>${record.details}</pre>
+                    </li>
+                `;
+            });
+            html += '</ul>';
+            modalBody.innerHTML = html;
+        }
+
+        const modal = new bootstrap.Modal(modalElement);
+        modal.show();
+    } catch (error) {
+        console.error('加载任务历史失败:', error);
+        alert('加载任务历史失败: ' + error.message);
     }
 }

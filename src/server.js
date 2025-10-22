@@ -732,21 +732,36 @@ class WebServer {
     }
     if (cronSvc.validate(schedule.cron)) {
         const task = cronSvc.schedule(schedule.cron, async () => {
-            console.log(`[${new Date().toLocaleString()}] Running scheduled task: ${schedule.name} (Type: ${schedule.task_type})`);
+            const startTime = new Date();
+            console.log(`[定时任务开始] 任务 '${schedule.name}' (ID: ${schedule.id}) 已于 ${startTime.toLocaleString()} 开始执行。Cron: [${schedule.cron}]`);
+            let status = 'failed';
+            let details = '';
             try {
+                let result;
                 switch (schedule.task_type) {
                     case 'run_analysis':
-                        await analysisService.runInventoryAnalysis();
+                        result = await analysisService.runInventoryAnalysis();
                         break;
                     case 'fetch_inventory':
                     default:
                         const authInfo = await this.getXizhiyueAuthInfo();
-                        await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
+                        result = await inventoryService.fetchAndSaveAllTrackedSkus(authInfo.token);
                         break;
                 }
-                console.log(`Scheduled task ${schedule.name} completed successfully.`);
+                status = 'completed';
+                details = JSON.stringify(result);
+                console.log(`[${new Date().toLocaleString()}] Scheduled task ${schedule.name} completed successfully.`);
             } catch (error) {
-                console.error(`Error running scheduled task ${schedule.name}:`, error);
+                console.error(`[${new Date().toLocaleString()}] Error running scheduled task ${schedule.name}:`, error);
+                details = error.message;
+            } finally {
+                database.saveScheduledTaskHistory({
+                    schedule_id: schedule.id,
+                    task_name: schedule.name,
+                    run_time: startTime.toISOString(),
+                    status: status,
+                    details: details
+                });
             }
         });
         this.scheduledTasks.set(schedule.id, task);

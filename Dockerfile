@@ -63,4 +63,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 # Set the entrypoint and default command.
 # The entrypoint script will execute the CMD as the 'nextjs' user.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["node", "src/app.js"]
+CMD ["node", "-u", "src/app.js"]
