@@ -55,6 +55,7 @@ EXPOSE 3000
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV NODE_UNBUFFERED=1
 
 # Healthcheck to verify that the server is running.
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
@@ -63,4 +64,4 @@ HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
 # Set the entrypoint and default command.
 # The entrypoint script will execute the CMD as the 'nextjs' user.
 ENTRYPOINT ["/app/docker-entrypoint.sh"]
-CMD ["node", "-u", "src/app.js"]
+CMD ["node", "src/app.js"]
