@@ -1,5 +1,5 @@
-let allAlerts = [];
-let currentAlertsPage = 1;
+var allAlerts = [];
+var currentAlertsPage = 1;
 const alertsPerPage = 50;
 
 window.initializeSection = async () => {

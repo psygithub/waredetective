@@ -1,18 +1,21 @@
 // Functions for managing configurations
 
 async function loadConfigs() {
+    const container = document.getElementById('configsList');
+    if (!container) {
+        return; // If the container doesn't exist on the page, do nothing.
+    }
+
     try {
         const configs = await apiRequest('/api/configs');
-        displayConfigs(configs);
+        displayConfigs(configs, container);
     } catch (error) {
         console.error('加载配置失败:', error);
-        document.getElementById('configsList').innerHTML = '<p class="text-danger">加载配置失败</p>';
+        container.innerHTML = '<p class="text-danger">加载配置失败</p>';
     }
 }
 
-function displayConfigs(configs) {
-    const container = document.getElementById('configsList');
-
+function displayConfigs(configs, container) {
     if (configs.length === 0) {
         container.innerHTML = '<p class="text-muted">暂无配置</p>';
         return;
