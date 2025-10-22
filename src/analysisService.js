@@ -1,14 +1,23 @@
 const db = require('./db_sqlite');
 
-async function runInventoryAnalysis() {
-    console.log('开始执行库存消耗分析...');
+async function runInventoryAnalysis(trackedSkuId = null) {
+    let newAlertsCount = 0;
     const configs = db.getSystemConfigs();
     const timespan = parseInt(configs.alert_timespan || '7', 10);
     const threshold = parseFloat(configs.alert_threshold || '0.5');
     const minDailyConsumption = parseFloat(configs.alert_min_daily_consumption || '1');
 
-    const skus = db.getTrackedSkus();
-    for (const sku of skus) {
+    let skusToAnalyze;
+    if (trackedSkuId) {
+        console.log(`开始为单个SKU (ID: ${trackedSkuId}) 执行库存消耗分析...`);
+        const singleSku = db.getTrackedSkuById(trackedSkuId);
+        skusToAnalyze = singleSku ? [singleSku] : [];
+    } else {
+        console.log('开始为所有SKU执行库存消耗分析...');
+        skusToAnalyze = db.getTrackedSkus();
+    }
+
+    for (const sku of skusToAnalyze) {
         const history = db.getRegionalInventoryHistoryForSku(sku.id, timespan);
         
         // 按区域分组
@@ -55,12 +64,14 @@ async function runInventoryAnalysis() {
                         alert_type: 'FAST_CONSUMPTION',
                         details: JSON.stringify(alertDetails),
                     });
+                    newAlertsCount++;
                     console.log(`预警: SKU ${sku.sku} 在 ${firstRecord.region_name} 消耗过快! 日均消耗率: ${consumptionRate.toFixed(3)}, 日均消耗量: ${dailyConsumption.toFixed(2)}`);
                 }
             }
         }
     }
     console.log('库存消耗分析完成。');
+    return { newAlertsCount };
 }
 
 module.exports = {

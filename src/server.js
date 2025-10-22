@@ -568,6 +568,18 @@ class WebServer {
             res.status(500).json({ error: '手动分析失败: ' + error.message });
         }
     });
+    router.post('/run-analysis/:skuId', async (req, res) => {
+        try {
+            const { skuId } = req.params;
+            const result = await analysisService.runInventoryAnalysis(skuId);
+            res.json({ 
+                message: `SKU (ID: ${skuId}) 分析完成。`,
+                ...result 
+            });
+        } catch (error) {
+            res.status(500).json({ error: `单个SKU分析失败: ${error.message}` });
+        }
+    });
     router.get('/system-configs', (req, res) => {
         try {
             const configs = database.getSystemConfigs();

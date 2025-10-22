@@ -1,7 +1,19 @@
 var existingSkus = new Set();
+let alertsBySkuId = {};
 
 window.initializeSection = async () => {
     document.getElementById('rows-per-page-select').addEventListener('change', () => loadSkus(1));
+
+    // Fetch alerts and process them into a lookup map
+    const alerts = await apiRequest('/api/inventory/alerts');
+    alertsBySkuId = alerts.reduce((acc, alert) => {
+        if (!acc[alert.tracked_sku_id]) {
+            acc[alert.tracked_sku_id] = [];
+        }
+        acc[alert.tracked_sku_id].push(alert);
+        return acc;
+    }, {});
+
     await loadSkus();
     await loadSchedule();
     await loadScheduleHistory();
@@ -46,15 +58,17 @@ function renderSkuList(skus) {
         const tr = document.createElement('tr');
         tr.style.cursor = 'pointer';
         tr.dataset.skuId = sku.id;
+        const hasAlerts = alertsBySkuId[sku.id] && alertsBySkuId[sku.id].length > 0;
         const recordTime = sku.latest_record_time ? new Date(sku.latest_record_time).toLocaleString() : 'N/A';
         tr.innerHTML = `
             <td><img src="${sku.product_image || 'https://via.placeholder.com/50'}" alt="${sku.sku}" width="50" height="50"></td>
-            <td>${sku.sku}</td>
+            <td>${sku.sku} ${hasAlerts ? '<span class="badge rounded-pill bg-danger ms-2">预警</span>' : ''}</td>
             <td>${sku.latest_qty ?? 'NA'}</td>
             <td>${sku.latest_month_sale ?? 'N/A'}</td>
             <td>${recordTime}</td>
             <td>
                 <button class="btn btn-info btn-sm query-btn" data-id="${sku.id}">查询</button>
+                <button class="btn btn-warning btn-sm analyze-btn" data-id="${sku.id}">分析</button>
                 <button class="btn btn-danger btn-sm delete-btn" data-id="${sku.id}">删除</button>
             </td>
         `;
@@ -175,13 +189,35 @@ document.getElementById('sku-list-body').addEventListener('click', async (e) => 
         return;
     }
 
-    // Handle row click to show chart
+    // Handle analyze button click
+    if (target.classList.contains('analyze-btn')) {
+        e.stopPropagation(); // Prevent row click event
+        analyzeSku(skuId, target);
+        return;
+    }
+
+    // Handle row click to show chart and toggle alerts
     if (skuId) {
-        // Remove active class from all other rows
+        // Prevent chart loading and alert toggling when clicking a button inside the row
+        if (target.tagName === 'BUTTON' || target.closest('button')) {
+            return;
+        }
+
+        // Highlight logic
+        const isActive = tr.classList.contains('table-active');
         document.querySelectorAll('#sku-list-body tr').forEach(row => row.classList.remove('table-active'));
-        // Add active class to the clicked row
-        tr.classList.add('table-active');
+        if (!isActive) {
+            tr.classList.add('table-active');
+        }
+
+        // Always load chart
         loadHistoryForSku(skuId);
+
+        // Toggle alert row
+        const hasAlerts = alertsBySkuId[skuId] && alertsBySkuId[skuId].length > 0;
+        if (hasAlerts) {
+            toggleAlertRow(skuId, tr);
+        }
     }
 });
 
@@ -283,6 +319,70 @@ async function loadScheduleHistory() {
     }
 }
 
+
+async function analyzeSku(skuId, button) {
+    try {
+        button.disabled = true;
+        button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+        
+        const result = await apiRequest(`/api/inventory/run-analysis/${skuId}`, 'POST');
+        
+        alert(`分析完成！新增 ${result.newAlertsCount} 条预警。`);
+        
+        // 全面刷新数据以显示最新预警状态
+        await initializeSection();
+
+    } catch (error) {
+        alert(`分析失败: ${error.message}`);
+    } finally {
+        button.disabled = false;
+        button.innerHTML = '分析';
+    }
+}
+
+function toggleAlertRow(skuId, parentTr) {
+    const nextTr = parentTr.nextElementSibling;
+    
+    // Close any other open alert rows first
+    const otherOpenRows = document.querySelectorAll('.alert-detail-row');
+    otherOpenRows.forEach(row => {
+        if (row !== nextTr) {
+            row.remove();
+        }
+    });
+
+    // Check if the next row is the one we are trying to toggle
+    if (nextTr && nextTr.classList.contains('alert-detail-row') && nextTr.dataset.parentSkuId === skuId) {
+        // It's our row and it's open, so close it
+        nextTr.remove();
+    } else {
+        // It's either no row or another sku's row, so open ours
+        const alertsForSku = alertsBySkuId[skuId];
+        if (alertsForSku && alertsForSku.length > 0) {
+            const detailTr = document.createElement('tr');
+            detailTr.classList.add('alert-detail-row');
+            detailTr.dataset.parentSkuId = skuId;
+            
+            const detailTd = document.createElement('td');
+            detailTd.colSpan = "6"; // Span all columns
+            
+            const alertContent = alertsForSku.map(alert => {
+                const details = JSON.parse(alert.details);
+                return `<p class="mb-1"><strong>${alert.region_name}:</strong> 库存消耗过快！在 ${details.days} 天内消耗了 ${details.qtyChange} 件 (从 ${details.startQty} 到 ${details.endQty})。</p>`;
+            }).join('');
+
+            detailTd.innerHTML = `
+                <div class="alert alert-warning mb-0">
+                    <h6 class="alert-heading">预警详情</h6>
+                    ${alertContent}
+                </div>
+            `;
+            
+            detailTr.appendChild(detailTd);
+            parentTr.after(detailTr);
+        }
+    }
+}
 
 async function querySku(skuId) {
     try {
