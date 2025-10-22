@@ -475,8 +475,28 @@ function updateSystemConfigs(configs) {
         stmt.run(key, configs[key]);
     }
 }
-function getActiveAlerts(limit = 100) { 
-    return db.prepare("SELECT * FROM product_alerts WHERE status = 'ACTIVE' ORDER BY created_at DESC, alert_level DESC LIMIT ?").all(limit); 
+function getActiveAlerts(limit = 100) {
+    const result = getActiveAlertsPaginated({ limit, page: 1 });
+    return result.items;
+}
+
+function getActiveAlertsPaginated({ page = 1, limit = 50 }) {
+    const offset = (page - 1) * limit;
+
+    // 首先，获取总记录数
+    const totalStmt = db.prepare("SELECT COUNT(*) as total FROM product_alerts WHERE status = 'ACTIVE'");
+    const { total } = totalStmt.get();
+
+    // 然后，获取分页后的数据
+    const itemsStmt = db.prepare("SELECT * FROM product_alerts WHERE status = 'ACTIVE' ORDER BY created_at DESC, alert_level DESC LIMIT ? OFFSET ?");
+    const items = itemsStmt.all(limit, offset);
+
+    return {
+        items,
+        total,
+        page,
+        limit
+    };
 }
 
 function getTrackedSkusBySkuNames(skus) {
@@ -513,5 +533,6 @@ module.exports = {
   getInventoryHistory, saveInventoryRecord, hasInventoryHistory, saveRegionalInventoryRecord,
   getSystemConfigs, updateSystemConfigs, getRegionalInventoryHistoryForSku, createAlert,
   getRegionalInventoryHistoryBySkuId, getLatestRegionalInventoryHistory, getAllRegions, getActiveAlerts,
+  getActiveAlertsPaginated, // 导出新函数
   getUserSkus, replaceUserSkus
 };

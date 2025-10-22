@@ -1,14 +1,15 @@
 var existingSkus = new Set();
 var alertsBySkuId = {};
 
-window.initializeSection = async () => {
+window.sectionInitializers = window.sectionInitializers || {};
+window.sectionInitializers['inventory-config'] = async () => {
     const rowsPerPageSelect = document.getElementById('rows-per-page-select');
     if (rowsPerPageSelect) {
         rowsPerPageSelect.addEventListener('change', () => loadSkus(1));
     }
 
     // Fetch alerts and process them into a lookup map
-    const alerts = await apiRequest('/api/inventory/alerts');
+    const alerts = await apiRequest('/api/inventory/alerts/all');
     alertsBySkuId = alerts.reduce((acc, alert) => {
         if (!acc[alert.tracked_sku_id]) {
             acc[alert.tracked_sku_id] = [];

@@ -4,7 +4,8 @@
     // A flag to ensure event listeners are set up only once per load.
     let listenersInitialized = false;
 
-    window.initializeSection = async () => {
+    window.sectionInitializers = window.sectionInitializers || {};
+    window.sectionInitializers.users = async () => {
         if (currentUser.role === 'admin') {
             // Load the modal's HTML into the placeholder
             const container = document.getElementById('sku-manager-container');

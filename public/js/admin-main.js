@@ -123,6 +123,9 @@ function setupNavigation() {
     });
 }
 
+// 初始化全局的 section 初始化函数注册表
+window.sectionInitializers = window.sectionInitializers || {};
+
 // 显示指定部分
 async function showSection(section) {
     const mainContent = document.querySelector('.main-content');
@@ -134,18 +137,15 @@ async function showSection(section) {
         const html = await response.text();
         mainContent.innerHTML = html;
 
-        // 加载并执行相应的JS模块
+        // 加载相应的JS模块
         await loadAndExecuteScript(`/js/${section}.js`);
         
         // 等待浏览器下一帧渲染，确保DOM元素可用
         await new Promise(resolve => requestAnimationFrame(resolve));
 
-        // 确保在脚本加载后执行初始化函数
-        if (window.initializeSection) {
-            // 清理上一个模块可能留下的初始化函数，避免混淆
-            const initFunc = window.initializeSection;
-            window.initializeSection = null; 
-            await initFunc();
+        // 从注册表中查找并执行初始化函数
+        if (window.sectionInitializers && typeof window.sectionInitializers[section] === 'function') {
+            await window.sectionInitializers[section]();
         }
     } catch (error) {
         mainContent.innerHTML = `<div class="alert alert-danger">Error loading section: ${section}</div>`;
@@ -155,10 +155,18 @@ async function showSection(section) {
 
 function loadAndExecuteScript(src) {
     return new Promise((resolve, reject) => {
+        // 脚本的 section 名称，例如从 '/js/dashboard.js' 提取 'dashboard'
+        const sectionName = src.split('/').pop().replace('.js', '');
+
         // 如果脚本已经加载过，则直接返回
         if (loadedScripts[src]) {
             console.log(`脚本 ${src} 已缓存，直接使用。`);
-            return resolve();
+            // 确保即使脚本已缓存，初始化函数也已注册
+            if (window.sectionInitializers && typeof window.sectionInitializers[sectionName] === 'function') {
+                return resolve();
+            }
+            // 如果脚本已加载但初始化函数丢失（不太可能发生），则拒绝
+            return reject(new Error(`脚本 ${src} 已缓存但初始化函数丢失。`));
         }
 
         const script = document.createElement('script');
@@ -168,7 +176,14 @@ function loadAndExecuteScript(src) {
         script.onload = () => {
             console.log(`脚本 ${src} 加载完成。`);
             loadedScripts[src] = true; // 标记为已加载
-            resolve();
+            // 验证初始化函数是否已注册
+            if (window.sectionInitializers && typeof window.sectionInitializers[sectionName] === 'function') {
+                resolve();
+            } else {
+                // 脚本加载了，但没有按预期注册初始化函数
+                console.warn(`脚本 ${src} 已加载，但未找到初始化函数 window.sectionInitializers.${sectionName}`);
+                resolve(); // 仍然 resolve，允许页面继续，即使该部分可能无法完全初始化
+            }
         };
         
         script.onerror = () => {

@@ -1,5 +1,6 @@
 (() => {
-    window.initializeSection = async () => {
+    window.sectionInitializers = window.sectionInitializers || {};
+    window.sectionInitializers['pivot-table'] = async () => {
         await loadLatestPivotData();
     };
 

@@ -614,10 +614,24 @@ class WebServer {
     });
     router.get('/alerts', (req, res) => {
         try {
+            const { page = 1, limit = 50 } = req.query;
+            const paginatedAlerts = database.getActiveAlertsPaginated({
+                page: parseInt(page),
+                limit: parseInt(limit)
+            });
+            res.json(paginatedAlerts);
+        } catch (error) {
+            res.status(500).json({ error: '获取预警失败: ' + error.message });
+        }
+    });
+
+    router.get('/alerts/all', (req, res) => {
+        try {
+            // 注意：这里调用的是旧的、非分页的函数
             const alerts = database.getActiveAlerts();
             res.json(alerts);
         } catch (error) {
-            res.status(500).json({ error: '获取预警失败: ' + error.message });
+            res.status(500).json({ error: '获取所有预警失败: ' + error.message });
         }
     });
     router.get('/pivot-history', (req, res) => {

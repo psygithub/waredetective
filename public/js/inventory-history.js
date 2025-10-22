@@ -1,4 +1,5 @@
-window.initializeSection = async () => {
+window.sectionInitializers = window.sectionInitializers || {};
+window.sectionInitializers['inventory-history'] = async () => {
     // The sku-manager module is not needed here for now, but this shows how it could be loaded.
     // await loadSkuManagerModule(); 
     await init();

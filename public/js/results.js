@@ -1,4 +1,5 @@
-window.initializeSection = async () => {
+window.sectionInitializers = window.sectionInitializers || {};
+window.sectionInitializers.results = async () => {
     await loadResults();
 };
 

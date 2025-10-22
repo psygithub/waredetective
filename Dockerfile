@@ -12,6 +12,9 @@ RUN npm ci --omit=dev
 # .dockerignore file will prevent unnecessary files from being copied.
 COPY . .
 
+# Ensure the entrypoint script is executable in a separate step for better caching.
+RUN chmod +x /app/docker-entrypoint.sh
+
 
 # ---- Stage 2: Production ----
 # Use a fresh, clean image for the final artifact to keep it small.
@@ -38,11 +41,16 @@ RUN addgroup --system nodejs && \
     adduser --system --ingroup nodejs nextjs
 
 # Copy application files from the 'builder' stage with correct permissions.
-# Using --chown flag avoids a slow and separate RUN chown command.
-COPY --from=builder --chown=nextjs:nodejs /app .
+# We copy node_modules and package files first, then the rest of the app.
+# This improves caching, as code changes won't invalidate the node_modules layer.
+COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
+COPY --from=builder --chown=nextjs:nodejs /app/public ./public
+COPY --from=builder --chown=nextjs:nodejs /app/src ./src
+COPY --from=builder --chown=nextjs:nodejs /app/config ./config
 
-# The entrypoint script needs to be executable.
-RUN chmod +x /app/docker-entrypoint.sh
+# Copy the entrypoint script separately. It was made executable in the builder stage.
+COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh .
 
 EXPOSE 3000
 
