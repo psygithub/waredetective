@@ -479,6 +479,12 @@ function getActiveAlerts(limit = 100) {
     return db.prepare("SELECT * FROM product_alerts WHERE status = 'ACTIVE' ORDER BY created_at DESC, alert_level DESC LIMIT ?").all(limit); 
 }
 
+function getTrackedSkusBySkuNames(skus) {
+    const placeholders = skus.map(() => '?').join(',');
+    const stmt = db.prepare(`SELECT * FROM tracked_skus WHERE sku IN (${placeholders})`);
+    return stmt.all(...skus);
+}
+
 function getUserSkus(userId, isAdmin = false) {
     let query = `SELECT ts.*, us.expires_at FROM tracked_skus ts JOIN user_sku us ON ts.id = us.tracked_sku_id WHERE us.user_id = ?`;
     if (!isAdmin) {
@@ -503,7 +509,7 @@ module.exports = {
   saveResult, getResults, getResultById, getScheduledTaskHistory,
   saveSchedule, getSchedules, getScheduleById, updateSchedule, deleteSchedule,
   getXizhiyueProductBySkuId, updateXizhiyueProduct, createXizhiyueProduct,
-  getTrackedSkus, getTrackedSkuBySku, addTrackedSku, deleteTrackedSku, getTrackedSkuById, updateTrackedSku,
+  getTrackedSkus, getTrackedSkuBySku, addTrackedSku, deleteTrackedSku, getTrackedSkuById, updateTrackedSku, getTrackedSkusBySkuNames,
   getInventoryHistory, saveInventoryRecord, hasInventoryHistory, saveRegionalInventoryRecord,
   getSystemConfigs, updateSystemConfigs, getRegionalInventoryHistoryForSku, createAlert,
   getRegionalInventoryHistoryBySkuId, getLatestRegionalInventoryHistory, getAllRegions, getActiveAlerts,

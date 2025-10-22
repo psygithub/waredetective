@@ -227,6 +227,18 @@ class WebServer {
         res.status(500).json({ error: '更新用户SKU关联失败: ' + error.message });
       }
     });
+    this.app.post('/api/skus/lookup', auth.authenticateToken.bind(auth), (req, res) => {
+        try {
+            const { skus } = req.body;
+            if (!Array.isArray(skus) || skus.length === 0) {
+                return res.status(400).json({ error: 'SKU列表不能为空' });
+            }
+            const foundSkus = database.getTrackedSkusBySkuNames(skus);
+            res.json(foundSkus);
+        } catch (error) {
+            res.status(500).json({ error: '查询SKU失败: ' + error.message });
+        }
+    });
     this.app.get('/api/skus', auth.authenticateToken.bind(auth), (req, res) => {
       try {
         const allSkus = database.getTrackedSkus();

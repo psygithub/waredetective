@@ -10,14 +10,9 @@
                 <input type="hidden" id="skuUserId">
                 <!-- 区域1: 手动录入 -->
                 <div class="mb-3">
-                    <h6>手动录入SKU</h6>
-                    <div class="input-group">
-                        <input type="text" class="form-control" id="manualSkuInput" placeholder="输入SKU并查询">
-                        <button class="btn btn-primary" type="button" id="querySkuBtn">
-                            <i class="fas fa-search"></i> 查询
-                        </button>
-                    </div>
-                    <div id="manualSkuResult" class="mt-2"></div>
+                    <h6>批量查询SKU (每行一个)</h6>
+                    <textarea class="form-control" id="batchSkuQueryInput" rows="8" placeholder="SKU1&#10;SKU2&#10;SKU3"></textarea>
+                    <button class="btn btn-primary btn-sm mt-2" id="queryBatchSkuBtn">查询</button>
                 </div>
 
                 <!-- 区域2: 用户已选择的SKU -->
