@@ -4,13 +4,17 @@ FROM node:20-bullseye AS builder
 
 WORKDIR /app
 
-# Copy package files and install dependencies using npm ci for consistency.
+# Copy package files.
 COPY package*.json ./
+
+# Install dependencies. This layer is cached if package*.json doesn't change.
 RUN npm ci --omit=dev
 
-# Copy the rest of the application source code.
-# .dockerignore file will prevent unnecessary files from being copied.
-COPY . .
+# Copy only necessary application files and directories.
+# This is more efficient than 'COPY . .' as it avoids scanning ignored files.
+COPY public ./public
+COPY src ./src
+COPY config ./config
 
 # ---- Stage 2: Production ----
 # Use a fresh, clean image for the final artifact to keep it small.
