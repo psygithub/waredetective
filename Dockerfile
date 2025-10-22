@@ -12,45 +12,31 @@ RUN npm ci --omit=dev
 # .dockerignore file will prevent unnecessary files from being copied.
 COPY . .
 
-# Ensure the entrypoint script is executable in a separate step for better caching.
-RUN chmod +x /app/docker-entrypoint.sh
-
-
 # ---- Stage 2: Production ----
 # Use a fresh, clean image for the final artifact to keep it small.
 FROM node:20-bullseye
 
 # Install ONLY necessary runtime OS dependencies.
-# Playwright/Chromium and related font packages have been removed to reduce size.
 RUN apt-get update && apt-get install -y \
     sqlite3 \
     ca-certificates \
-    gosu \
     --no-install-recommends && \
     rm -rf /var/lib/apt/lists/*
 
 # Set the timezone to Asia/Shanghai.
 RUN apt-get update && apt-get install -y tzdata && \
     ln -sf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime && \
-    echo "Asia/Shanghai" > /etc/timezone
+    echo "Asia/Shanghai" > /etc/timezone && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Create a non-root user for security purposes.
-RUN addgroup --system nodejs && \
-    adduser --system --ingroup nodejs nextjs
+# Copy application files from the builder stage.
+COPY --from=builder /app .
 
-# Copy application files from the 'builder' stage with correct permissions.
-# We copy node_modules and package files first, then the rest of the app.
-# This improves caching, as code changes won't invalidate the node_modules layer.
-COPY --from=builder --chown=nextjs:nodejs /app/package*.json ./
-COPY --from=builder --chown=nextjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nextjs:nodejs /app/public ./public
-COPY --from=builder --chown=nextjs:nodejs /app/src ./src
-COPY --from=builder --chown=nextjs:nodejs /app/config ./config
-
-# Copy the entrypoint script separately. It was made executable in the builder stage.
-COPY --from=builder --chown=nextjs:nodejs /app/docker-entrypoint.sh .
+# Create directories for volume mounts.
+# This is done as root, so no permission issues.
+RUN mkdir -p /app/data /app/output /app/config
 
 EXPOSE 3000
 
@@ -62,7 +48,5 @@ ENV NODE_UNBUFFERED=1
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
   CMD wget --spider -q http://localhost:3000/ || exit 1
 
-# Set the entrypoint and default command.
-# The entrypoint script will execute the CMD as the 'nextjs' user.
-ENTRYPOINT ["/app/docker-entrypoint.sh"]
+# Run the application directly as root.
 CMD ["node", "src/app.js"]
