@@ -55,34 +55,74 @@ log() {
 # 检查并安装 rclone
 install_rclone() {
     if ! command -v rclone &> /dev/null; then
-        log "未找到 rclone，正在尝试安装..."
-        if command -v yum &> /dev/null; then
-            sudo yum install -y rclone
-            log "rclone 安装成功。"
-            echo "--------------------------------------------------------------------"
-            echo "重要提示: Rclone 已安装，但您需要手动配置它来连接 Google Drive。"
-            echo "请执行以下命令并按照指引操作："
-            echo ""
-            echo "  rclone config"
-            echo ""
-            echo "操作指南:"
-            echo "1. 输入 'n' 创建一个新的 remote。"
-            echo "2. 为它命名 (例如: '$RCLONE_REMOTE')。"
-            echo "3. 在列表中选择 'drive' (Google Drive)。"
-            echo "4. 对于 client_id 和 client_secret，直接按 Enter 跳过。"
-            echo "5. 选择 '1' (Full access)。"
-            echo "6. 对于 root_folder_id 和 service_account_file，直接按 Enter 跳过。"
-            echo "7. 当询问 'Use auto config?' 时，输入 'n'。"
-            echo "8. rclone 会生成一个链接。将此链接复制到您本地电脑的浏览器中打开。"
-            echo "9. 在浏览器中授权，Google 会给您一个验证码。"
-            echo "10. 将验证码粘贴回服务器的终端中。"
-            echo "11. 确认配置，然后输入 'q' 退出。"
-            echo "--------------------------------------------------------------------"
-            exit 0 # 首次安装后退出，让用户先完成配置
-        else
-            log "错误: 未找到 yum。请手动安装 rclone。"
+        log "未找到 rclone，正在使用官方脚本进行安装..."
+        
+        # 检查 curl 是否安装
+        if ! command -v curl &> /dev/null; then
+            log "错误: 未找到 curl。请先安装 curl (sudo yum install curl) 后再运行此脚本。"
             exit 1
         fi
+        
+        # 下载并执行 rclone 官方安装脚本
+        curl https://rclone.org/install.sh | sudo bash
+        
+        if [ $? -ne 0 ]; then
+            log "错误: rclone 安装失败。请检查网络连接或尝试手动安装。"
+            exit 1
+        fi
+
+        log "rclone 安装成功。"
+        echo ""
+        echo "===================================================================="
+        echo " [!] 重要操作：配置 Rclone 连接 Google Drive"
+        echo "===================================================================="
+        echo "Rclone 已安装，现在您需要手动进行一次性授权配置。"
+        echo "请以将要运行备份任务的用户身份，在终端中执行以下命令："
+        echo ""
+        echo "   rclone config"
+        echo ""
+        echo "然后完全按照下面的步骤操作："
+        echo "--------------------------------------------------------------------"
+        echo " 1. 看到 'n/s/q>' 提示时, 输入 'n' (新建一个 remote), 按 Enter。"
+        echo ""
+        echo " 2. 'name>': 输入一个此连接的简称, 例如 '$RCLONE_REMOTE', 按 Enter。"
+        echo "    -> 这个名字需要填入本脚本顶部的 RCLONE_REMOTE 配置项。"
+        echo ""
+        echo " 3. 'Storage>': 在列表中找到 'drive' (Google Drive), 输入对应的数字, 按 Enter。"
+        echo ""
+        echo " 4. 'client_id>': 直接按 Enter 跳过。"
+        echo ""
+        echo " 5. 'client_secret>': 直接按 Enter 跳过。"
+        echo ""
+        echo " 6. 'scope>': 输入 '1' (完全访问权限), 按 Enter。"
+        echo ""
+        echo " 7. 'root_folder_id>': 直接按 Enter 跳过。"
+        echo ""
+        echo " 8. 'service_account_file>': 直接按 Enter 跳过。"
+        echo ""
+        echo " 9. 'Edit advanced config?': 输入 'n' (否), 按 Enter。"
+        echo ""
+        echo "10. 'Use auto config?': 输入 'n' (否), 按 Enter。 (这是在服务器上配置的关键步骤)"
+        echo ""
+        echo "11. 复制链接: rclone 会生成一个 'https://accounts.google.com/...' 链接。"
+        echo "    -> 将这个链接完整地复制下来。"
+        echo ""
+        echo "12. 浏览器授权: 将链接粘贴到您本地电脑的浏览器中打开, 登录并授权。"
+        echo ""
+        echo "13. 获取验证码: Google 会在浏览器中显示一个验证码字符串。"
+        echo ""
+        echo "14. 粘贴验证码: 将验证码完整地复制, 然后粘贴回服务器终端, 按 Enter。"
+        echo ""
+        echo "15. 'Configure this as a team drive?': 输入 'n' (否), 按 Enter。"
+        echo ""
+        echo "16. 'y/e/d>': 看到配置摘要后, 输入 'y' (是) 保存配置, 按 Enter。"
+        echo ""
+        echo "17. 'q>': 输入 'q' 退出配置工具。"
+        echo "--------------------------------------------------------------------"
+        echo ""
+        echo "配置完成后，请再次运行此脚本以完成定时任务的设置。"
+        echo "===================================================================="
+        exit 0 # 首次安装后退出，强制用户先完成手动配置
     fi
 }
 
