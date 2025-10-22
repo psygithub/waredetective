@@ -1,3 +1,7 @@
+let allAlerts = [];
+let currentAlertsPage = 1;
+const alertsPerPage = 50;
+
 window.initializeSection = async () => {
     try {
         // 加载统计数据
@@ -52,8 +56,9 @@ async function loadAlerts() {
         return;
     }
     try {
-        const alerts = await apiRequest('/api/inventory/alerts');
-        displayAlerts(alerts);
+        allAlerts = await apiRequest('/api/inventory/alerts');
+        currentAlertsPage = 1;
+        displayAlerts(currentAlertsPage);
     } catch (error) {
         console.error('加载预警失败:', error);
         container.innerHTML = '<p class="text-danger">加载预警失败</p>';
@@ -69,20 +74,24 @@ function getBadgeForLevel(level) {
     }
 }
 
-function displayAlerts(alerts) {
+function displayAlerts(page) {
+    currentAlertsPage = page;
     const container = document.getElementById('alertsList');
-    if (!container) return; // Exit if container is not found
+    if (!container) return;
 
-    if (alerts.length === 0) {
+    if (allAlerts.length === 0) {
         container.innerHTML = '<p class="text-muted">暂无库存预警</p>';
+        document.getElementById('alerts-pagination').innerHTML = '';
         return;
     }
 
-    let html = `
-        <div class="list-group">
-    `;
+    const start = (page - 1) * alertsPerPage;
+    const end = start + alertsPerPage;
+    const paginatedAlerts = allAlerts.slice(start, end);
 
-    alerts.forEach(alert => {
+    let html = `<div class="list-group">`;
+
+    paginatedAlerts.forEach(alert => {
         const details = JSON.parse(alert.details);
         let itemClass = 'list-group-item-action';
         switch (alert.alert_level) {
@@ -92,21 +101,22 @@ function displayAlerts(alerts) {
         }
 
         html += `
-            <div class="list-group-item ${itemClass}">
-                <div class="d-flex w-100 justify-content-between">
-                    <h5 class="mb-1">${alert.sku} 在 ${alert.region_name} ${getBadgeForLevel(alert.alert_level)}</h5>
-                    <small>${new Date(alert.created_at).toLocaleString()}</small>
+            <div class="list-group-item ${itemClass} d-flex justify-content-between align-items-center">
+                <div>
+                    <strong class="mb-1">${alert.sku}</strong> 在 ${alert.region_name} ${getBadgeForLevel(alert.alert_level)}
+                    <span class="ms-3">
+                        (${details.days}天内消耗 ${details.qtyChange}件, 
+                        日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%)
+                    </span>
                 </div>
-                <p class="mb-1">
-                    库存消耗过快！在 ${details.days} 天内消耗了 ${details.qtyChange} 件 (从 ${details.startQty} 到 ${details.endQty})。
-                    日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%
-                </p>
+                <small>${new Date(alert.created_at).toLocaleString()}</small>
             </div>
         `;
     });
 
     html += '</div>';
     container.innerHTML = html;
+    renderAlertsPagination();
 }
 
 async function loadAlertConfigs() {
@@ -166,6 +176,30 @@ async function saveAlertConfig() {
     } catch (error) {
         alert('保存定时任务失败: ' + error.message);
     }
+}
+
+function renderAlertsPagination() {
+    const paginationContainer = document.getElementById('alerts-pagination');
+    const totalPages = Math.ceil(allAlerts.length / alertsPerPage);
+    paginationContainer.innerHTML = '';
+
+    if (totalPages <= 1) return;
+
+    let paginationHTML = `<ul class="pagination">`;
+
+    const prevDisabled = currentAlertsPage === 1 ? 'disabled' : '';
+    paginationHTML += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" onclick="event.preventDefault(); displayAlerts(${currentAlertsPage - 1})">上一页</a></li>`;
+
+    for (let i = 1; i <= totalPages; i++) {
+        const activeClass = i === currentAlertsPage ? 'active' : '';
+        paginationHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="event.preventDefault(); displayAlerts(${i})">${i}</a></li>`;
+    }
+
+    const nextDisabled = currentAlertsPage === totalPages ? 'disabled' : '';
+    paginationHTML += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" onclick="event.preventDefault(); displayAlerts(${currentAlertsPage + 1})">下一页</a></li>`;
+
+    paginationHTML += `</ul>`;
+    paginationContainer.innerHTML = paginationHTML;
 }
 
 async function runAnalysis() {

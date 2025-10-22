@@ -2,63 +2,91 @@
     <h1 class="h2">仪表板</h1>
 </div>
 
+<style>
+    .card-stats-compact .card-body {
+        padding: 0.8rem;
+    }
+    .card-stats-compact .card-category {
+        margin-bottom: 0.2rem;
+        font-size: 0.8rem;
+    }
+    .card-stats-compact .card-title {
+        margin-bottom: 0;
+        font-size: 1.5rem;
+    }
+    .card-stats-compact .icon i {
+        font-size: 1.8rem;
+    }
+</style>
+
 <!-- 统计卡片 -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card card-stats primary">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <p class="card-category">总配置数</p>
-                        <h3 class="card-title" id="totalConfigs">0</h3>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-cogs fa-2x text-primary"></i>
+<div class="card mt-3">
+    <div class="card-header">
+        <a class="text-decoration-none" data-bs-toggle="collapse" href="#stats-collapse-area" role="button" aria-expanded="false" aria-controls="stats-collapse-area">
+            <h5><i class="fas fa-chart-bar me-2"></i>统计概览 (点击展开/折叠)</h5>
+        </a>
+    </div>
+    <div class="collapse" id="stats-collapse-area">
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-3">
+                    <div class="card card-stats-compact primary">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <p class="card-category">总配置数</p>
+                                    <h3 class="card-title" id="totalConfigs">0</h3>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-cogs text-primary"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-stats success">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <p class="card-category">活跃任务</p>
-                        <h3 class="card-title" id="activeSchedules">0</h3>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-clock fa-2x text-success"></i>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-stats warning">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <p class="card-category">今日执行</p>
-                        <h3 class="card-title" id="todayResults">0</h3>
-                    </div>
-                    <div class="icon">
-                        <i class="fas fa-chart-line fa-2x text-warning"></i>
+                <div class="col-md-3">
+                    <div class="card card-stats-compact success">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <p class="card-category">活跃任务</p>
+                                    <h3 class="card-title" id="activeSchedules">0</h3>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-clock text-success"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card card-stats danger">
-            <div class="card-body">
-                <div class="d-flex justify-content-between">
-                    <div>
-                        <p class="card-category">总用户数</p>
-                        <h3 class="card-title" id="totalUsers">0</h3>
+                <div class="col-md-3">
+                    <div class="card card-stats-compact warning">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <p class="card-category">今日执行</p>
+                                    <h3 class="card-title" id="todayResults">0</h3>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-chart-line text-warning"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="icon">
-                        <i class="fas fa-users fa-2x text-danger"></i>
+                </div>
+                <div class="col-md-3">
+                    <div class="card card-stats-compact danger">
+                        <div class="card-body">
+                            <div class="d-flex justify-content-between">
+                                <div>
+                                    <p class="card-category">总用户数</p>
+                                    <h3 class="card-title" id="totalUsers">0</h3>
+                                </div>
+                                <div class="icon">
+                                    <i class="fas fa-users text-danger"></i>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -67,32 +95,38 @@
 </div>
 
 <!-- 预警配置 -->
-<div class="card mt-4">
+<div class="card mt-3">
     <div class="card-header">
-        <h5><i class="fas fa-cog me-2"></i>预警配置</h5>
+        <a class="text-decoration-none" data-bs-toggle="collapse" href="#config-collapse-area" role="button" aria-expanded="false" aria-controls="config-collapse-area">
+            <h5><i class="fas fa-cog me-2"></i>预警配置 (点击展开/折叠)</h5>
+        </a>
     </div>
-    <div class="card-body">
-        <div class="alert alert-info" role="alert">
-            <h5 class="alert-heading">三级预警规则说明</h5>
-            <p>系统会根据您配置的参数，自动进行三级预警判断。</p>
-            <hr>
-            <p class="mb-1"><strong>预警级别判断逻辑:</strong></p>
-            <ul>
-                <li><strong>3级 (高危)</strong>: <code>日均消耗量</code> > <code>高危日消耗量</code>。</li>
-                <li><strong>2级 (中危)</strong>: <code>日均消耗量</code> 在区间内，且 <code>日均消耗率</code> > <code>基础消耗率阈值</code> * <code>中级预警倍数</code>。</li>
-                <li><strong>1级 (低危)</strong>: <code>日均消耗量</code> 在区间内，且 <code>日均消耗率</code> > <code>基础消耗率阈值</code>。</li>
-            </ul>
-            <p class="mb-0"><strong>注意:</strong> 只有当 <code>日均消耗量</code> 大于等于 <code>关注区间下限</code> 时，系统才会开始进行1级和2级的预警判断。</p>
-            <hr>
-            <p class="mb-1"><strong>示例:</strong> 假设配置为：下限=<strong>5</strong>, 高危=<strong>20</strong>, 基础消耗率=<strong>0.03</strong>, 倍数=<strong>1.5</strong></p>
-            <ul>
-                <li>SKU A 日耗 <strong>25</strong>, 消耗率 0.04 -> <strong>3级 (高危)</strong>, 因为日耗 > 20。</li>
-                <li>SKU B 日耗 <strong>10</strong>, 消耗率 0.05 -> <strong>2级 (中危)</strong>, 因为消耗率 > 0.03 * 1.5。</li>
-                <li>SKU C 日耗 <strong>8</strong>, 消耗率 0.035 -> <strong>1级 (低危)</strong>, 因为消耗率 > 0.03。</li>
-                <li>SKU D 日耗 <strong>4</strong>, 消耗率 0.10 -> <strong>无预警</strong>, 因为日耗 < 5。</li>
-            </ul>
-        </div>
-        <div class="row">
+    <div class="collapse" id="config-collapse-area">
+        <div class="card-body py-2">
+            <details>
+                <summary class="text-info" style="cursor: pointer;">点击展开/折叠规则说明</summary>
+            <div class="alert alert-info mt-2" role="alert">
+                <h6 class="alert-heading">三级预警规则说明</h6>
+                <p class="small">系统会根据您配置的参数，自动进行三级预警判断。</p>
+                <hr>
+                <p class="small mb-1"><strong>预警级别判断逻辑:</strong></p>
+                <ul class="small">
+                    <li><strong>3级 (高危)</strong>: <code>日均消耗量</code> > <code>高危日消耗量</code>。</li>
+                    <li><strong>2级 (中危)</strong>: <code>日均消耗量</code> 在区间内，且 <code>日均消耗率</code> > <code>基础消耗率阈值</code> * <code>中级预警倍数</code>。</li>
+                    <li><strong>1级 (低危)</strong>: <code>日均消耗量</code> 在区间内，且 <code>日均消耗率</code> > <code>基础消耗率阈值</code>。</li>
+                </ul>
+                <p class="small mb-0"><strong>注意:</strong> 只有当 <code>日均消耗量</code> 大于等于 <code>关注区间下限</code> 时，系统才会开始进行1级和2级的预警判断。</p>
+                <hr>
+                <p class="small mb-1"><strong>示例:</strong> 假设配置为：下限=<strong>5</strong>, 高危=<strong>20</strong>, 基础消耗率=<strong>0.03</strong>, 倍数=<strong>1.5</strong></p>
+                <ul class="small">
+                    <li>SKU A 日耗 <strong>25</strong>, 消耗率 0.04 -> <strong>3级 (高危)</strong>, 因为日耗 > 20。</li>
+                    <li>SKU B 日耗 <strong>10</strong>, 消耗率 0.05 -> <strong>2级 (中危)</strong>, 因为消耗率 > 0.03 * 1.5。</li>
+                    <li>SKU C 日耗 <strong>8</strong>, 消耗率 0.035 -> <strong>1级 (低危)</strong>, 因为消耗率 > 0.03。</li>
+                    <li>SKU D 日耗 <strong>4</strong>, 消耗率 0.10 -> <strong>无预警</strong>, 因为日耗 < 5。</li>
+                </ul>
+            </div>
+        </details>
+        <div class="row mt-2">
             <div class="col-md-3 mb-3">
                 <label for="alert-cron-input" class="form-label">预警分析 Cron 表达式:</label>
                 <input type="text" id="alert-cron-input" class="form-control">
@@ -120,17 +154,19 @@
         </div>
         <button class="btn btn-success" id="save-alert-config-btn">保存预警配置</button>
         <button class="btn btn-info" id="run-analysis-btn">立即执行一次分析</button>
+        </div>
     </div>
 </div>
 
 <!-- 库存预警 -->
-<div class="card mt-4">
+<div class="card mt-3">
     <div class="card-header bg-danger text-white">
         <h5><i class="fas fa-exclamation-triangle me-2"></i>库存预警列表</h5>
     </div>
     <div class="card-body">
-        <div style="max-height: 400px; overflow-y: auto;">
+        <div style="max-height: 600px; overflow-y: auto;">
             <div id="alertsList">加载中...</div>
         </div>
+        <div id="alerts-pagination" class="d-flex justify-content-center mt-2"></div>
     </div>
 </div>
