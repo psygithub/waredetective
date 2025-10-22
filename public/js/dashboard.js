@@ -88,9 +88,12 @@ function displayAlerts(page) {
     const container = document.getElementById('alertsList');
     if (!container) return;
 
+    const paginationContainer = document.getElementById('alerts-pagination');
+    if (!paginationContainer) return;
+
     if (allAlerts.length === 0) {
-        container.innerHTML = '<p class="text-muted">暂无库存预警</p>';
-        document.getElementById('alerts-pagination').innerHTML = '';
+        container.innerHTML = '<tr><td colspan="5" class="text-center text-muted">暂无库存预警</td></tr>';
+        paginationContainer.innerHTML = '';
         return;
     }
 
@@ -98,32 +101,30 @@ function displayAlerts(page) {
     const end = start + alertsPerPage;
     const paginatedAlerts = allAlerts.slice(start, end);
 
-    let html = `<div class="list-group">`;
+    let html = '';
 
     paginatedAlerts.forEach(alert => {
         const details = JSON.parse(alert.details);
-        let itemClass = 'list-group-item-action';
+        let rowClass = '';
         switch (alert.alert_level) {
-            case 3: itemClass += ' list-group-item-danger'; break;
-            case 2: itemClass += ' list-group-item-warning'; break;
-            case 1: itemClass += ' list-group-item-info'; break;
+            case 3: rowClass = 'table-danger'; break;
+            case 2: rowClass = 'table-warning'; break;
+            case 1: rowClass = 'table-info'; break;
         }
 
+        const consumptionDetail = `(${details.days}天内消耗 ${details.qtyChange}件, 日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%)`;
+
         html += `
-            <div class="list-group-item ${itemClass} d-flex justify-content-between align-items-center">
-                <div>
-                    <strong class="mb-1">${alert.sku}</strong> 在 ${alert.region_name} ${getBadgeForLevel(alert.alert_level)}
-                    <span class="ms-3">
-                        (${details.days}天内消耗 ${details.qtyChange}件, 
-                        日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%)
-                    </span>
-                </div>
-                <small>${new Date(alert.created_at).toLocaleString()}</small>
-            </div>
+            <tr class="${rowClass}">
+                <td>${alert.sku}</td>
+                <td>${alert.region_name}</td>
+                <td>${getBadgeForLevel(alert.alert_level)}</td>
+                <td>${consumptionDetail}</td>
+                <td>${new Date(alert.created_at).toLocaleString()}</td>
+            </tr>
         `;
     });
 
-    html += '</div>';
     container.innerHTML = html;
     renderAlertsPagination();
 }

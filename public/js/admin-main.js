@@ -2,6 +2,7 @@
 let currentUser = null;
 let token = null;
 let sessionCheckInterval = null; // 用于会话检查的定时器
+const loadedScripts = {}; // 用于缓存已加载的脚本
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function () {
@@ -136,9 +137,15 @@ async function showSection(section) {
         // 加载并执行相应的JS模块
         await loadAndExecuteScript(`/js/${section}.js`);
         
+        // 等待浏览器下一帧渲染，确保DOM元素可用
+        await new Promise(resolve => requestAnimationFrame(resolve));
+
         // 确保在脚本加载后执行初始化函数
-        if (typeof window.initializeSection === 'function') {
-            window.initializeSection();
+        if (window.initializeSection) {
+            // 清理上一个模块可能留下的初始化函数，避免混淆
+            const initFunc = window.initializeSection;
+            window.initializeSection = null; 
+            await initFunc();
         }
     } catch (error) {
         mainContent.innerHTML = `<div class="alert alert-danger">Error loading section: ${section}</div>`;
@@ -148,17 +155,19 @@ async function showSection(section) {
 
 function loadAndExecuteScript(src) {
     return new Promise((resolve, reject) => {
-        // 移除所有之前动态加载的模块脚本
-        document.querySelectorAll('script[data-section-script]').forEach(s => s.remove());
+        // 如果脚本已经加载过，则直接返回
+        if (loadedScripts[src]) {
+            console.log(`脚本 ${src} 已缓存，直接使用。`);
+            return resolve();
+        }
 
         const script = document.createElement('script');
         // 添加时间戳作为查询参数以防止浏览器缓存 (cache busting)
         script.src = `${src}?v=${new Date().getTime()}`;
-        // 添加一个自定义属性来标识这些动态加载的脚本
-        script.dataset.sectionScript = 'true';
         
         script.onload = () => {
             console.log(`脚本 ${src} 加载完成。`);
+            loadedScripts[src] = true; // 标记为已加载
             resolve();
         };
         

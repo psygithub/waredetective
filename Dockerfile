@@ -37,19 +37,12 @@ WORKDIR /app
 RUN addgroup --system nodejs && \
     adduser --system --ingroup nodejs nextjs
 
-# Copy dependencies from the 'builder' stage.
-COPY --from=builder /app/node_modules ./node_modules
+# Copy application files from the 'builder' stage with correct permissions.
+# Using --chown flag avoids a slow and separate RUN chown command.
+COPY --from=builder --chown=nextjs:nodejs /app .
 
-# Copy application code from the 'builder' stage.
-COPY --from=builder /app .
-
-# Set correct permissions for the application directory.
-RUN chown -R nextjs:nodejs /app
-
-# Copy and set up the entrypoint script from the 'builder' stage.
-# The entrypoint script handles volume permissions at runtime.
-COPY --from=builder /app/docker-entrypoint.sh .
-RUN chmod +x docker-entrypoint.sh
+# The entrypoint script needs to be executable.
+RUN chmod +x /app/docker-entrypoint.sh
 
 EXPOSE 3000
 
