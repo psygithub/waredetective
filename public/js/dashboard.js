@@ -1,6 +1,10 @@
-var allAlerts = [];
-var currentAlertsPage = 1;
-const alertsPerPage = 50;
+// 避免重复加载脚本时出错
+if (typeof window.dashboardScriptLoaded === 'undefined') {
+    var allAlerts = [];
+    var currentAlertsPage = 1;
+    var alertsPerPage = 50;
+    window.dashboardScriptLoaded = true;
+}
 
 window.initializeSection = async () => {
     try {
@@ -40,9 +44,14 @@ window.initializeSection = async () => {
         loadAlertConfigs();
 
         // 绑定预警配置事件
-        document.getElementById('save-alert-config-btn').addEventListener('click', saveAlertConfig);
-        document.getElementById('run-analysis-btn').addEventListener('click', runAnalysis);
-
+        const saveBtn = document.getElementById('save-alert-config-btn');
+        if (saveBtn) {
+            saveBtn.addEventListener('click', saveAlertConfig);
+        }
+        const runBtn = document.getElementById('run-analysis-btn');
+        if (runBtn) {
+            runBtn.addEventListener('click', runAnalysis);
+        }
 
     } catch (error) {
         console.error('加载仪表板数据失败:', error);
@@ -120,21 +129,37 @@ function displayAlerts(page) {
 }
 
 async function loadAlertConfigs() {
-    const configs = await apiRequest('/api/inventory/system-configs');
-    if (configs) {
-        document.getElementById('alert-timespan-input').value = configs.alert_timespan || '7';
-        document.getElementById('alert-threshold-input').value = configs.alert_threshold || '0.03';
-        document.getElementById('alert-min-daily-consumption-input').value = configs.alert_min_daily_consumption || '5';
-        document.getElementById('alert-max-daily-consumption-input').value = configs.alert_max_daily_consumption || '20';
-        document.getElementById('alert-medium-threshold-multiplier-input').value = configs.alert_medium_threshold_multiplier || '1.5';
-    }
+    try {
+        const configs = await apiRequest('/api/inventory/system-configs');
+        if (configs) {
+            const alertTimespanInput = document.getElementById('alert-timespan-input');
+            if (alertTimespanInput) alertTimespanInput.value = configs.alert_timespan || '7';
 
-    const schedules = await apiRequest('/api/schedules');
-    const alertSchedule = schedules.find(s => s.name === 'Alert Analysis Schedule');
-    if (alertSchedule) {
-        document.getElementById('alert-cron-input').value = alertSchedule.cron;
-    } else {
-        document.getElementById('alert-cron-input').value = '0 3 * * *'; // 默认值
+            const alertThresholdInput = document.getElementById('alert-threshold-input');
+            if (alertThresholdInput) alertThresholdInput.value = configs.alert_threshold || '0.03';
+
+            const alertMinDailyConsumptionInput = document.getElementById('alert-min-daily-consumption-input');
+            if (alertMinDailyConsumptionInput) alertMinDailyConsumptionInput.value = configs.alert_min_daily_consumption || '5';
+
+            const alertMaxDailyConsumptionInput = document.getElementById('alert-max-daily-consumption-input');
+            if (alertMaxDailyConsumptionInput) alertMaxDailyConsumptionInput.value = configs.alert_max_daily_consumption || '20';
+
+            const alertMediumThresholdMultiplierInput = document.getElementById('alert-medium-threshold-multiplier-input');
+            if (alertMediumThresholdMultiplierInput) alertMediumThresholdMultiplierInput.value = configs.alert_medium_threshold_multiplier || '1.5';
+        }
+
+        const schedules = await apiRequest('/api/schedules');
+        const alertSchedule = schedules.find(s => s.name === 'Alert Analysis Schedule');
+        const alertCronInput = document.getElementById('alert-cron-input');
+        if (alertCronInput) {
+            if (alertSchedule) {
+                alertCronInput.value = alertSchedule.cron;
+            } else {
+                alertCronInput.value = '0 3 * * *'; // 默认值
+            }
+        }
+    } catch (error) {
+        console.error('加载预警配置失败:', error);
     }
 }
 

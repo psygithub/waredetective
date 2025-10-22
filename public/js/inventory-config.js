@@ -2,7 +2,10 @@ var existingSkus = new Set();
 var alertsBySkuId = {};
 
 window.initializeSection = async () => {
-    document.getElementById('rows-per-page-select').addEventListener('change', () => loadSkus(1));
+    const rowsPerPageSelect = document.getElementById('rows-per-page-select');
+    if (rowsPerPageSelect) {
+        rowsPerPageSelect.addEventListener('change', () => loadSkus(1));
+    }
 
     // Fetch alerts and process them into a lookup map
     const alerts = await apiRequest('/api/inventory/alerts');
@@ -58,6 +61,7 @@ function getBadgeForLevel(level) {
 
 function renderSkuList(skus) {
     const skuListBody = document.getElementById('sku-list-body');
+    if (!skuListBody) return;
     skuListBody.innerHTML = '';
     if (skus.length === 0) {
         skuListBody.innerHTML = '<tr><td colspan="6" class="text-center">暂无跟踪的 SKU。</td></tr>';
@@ -91,170 +95,181 @@ function renderSkuList(skus) {
     });
 }
 
-document.getElementById('save-skus-btn').addEventListener('click', async () => {
-    const skusText = document.getElementById('sku-textarea').value.trim();
-    if (!skusText) {
-        alert('请输入 SKU');
-        return;
-    }
-
-    const skus = skusText.split('\n').map(s => s.trim()).filter(s => s);
-    if (skus.length === 0) {
-        alert('请输入有效的 SKU');
-        return;
-    }
-
-    // 在发送API请求前去重
-    const uniqueSkus = [...new Set(skus)];
-    const totalOriginal = skus.length;
-    const totalUnique = uniqueSkus.length;
-
-    if (totalOriginal > totalUnique) {
-        alert(`您输入了 ${totalOriginal} 个SKU，其中包含重复项。将只处理 ${totalUnique} 个唯一的SKU。`);
-    }
-
-    // 过滤掉数据库中已存在的SKU
-    const newSkusToSubmit = uniqueSkus.filter(sku => !existingSkus.has(sku));
-    const skippedCount = totalUnique - newSkusToSubmit.length;
-
-    if (skippedCount > 0) {
-        alert(`${skippedCount} 个SKU因为已存在于跟踪列表中，将被跳过。`);
-    }
-
-    if (newSkusToSubmit.length === 0) {
-        alert('没有新的SKU需要添加。');
-        return;
-    }
-
-    // 显示加载指示
-    const saveBtn = document.getElementById('save-skus-btn');
-    saveBtn.disabled = true;
-    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在添加...';
-
-    let successCount = 0;
-    let failCount = 0;
-    let failedSkus = [];
-
-    for (const sku of newSkusToSubmit) {
-        try {
-            const result = await apiRequest('/api/inventory/skus', 'POST', { sku });
-            if (result) { // 假设API成功时返回真值
-                successCount++;
-            } else {
-                failCount++;
-                failedSkus.push(sku);
+document.addEventListener('DOMContentLoaded', function() {
+    const saveSkusBtn = document.getElementById('save-skus-btn');
+    if (saveSkusBtn) {
+        saveSkusBtn.addEventListener('click', async () => {
+            const skusText = document.getElementById('sku-textarea').value.trim();
+            if (!skusText) {
+                alert('请输入 SKU');
+                return;
             }
-        } catch (error) {
-            failCount++;
-            failedSkus.push(sku);
-            console.error(`添加 SKU ${sku} 失败:`, error);
-        }
+
+            const skus = skusText.split('\n').map(s => s.trim()).filter(s => s);
+            if (skus.length === 0) {
+                alert('请输入有效的 SKU');
+                return;
+            }
+
+            // 在发送API请求前去重
+            const uniqueSkus = [...new Set(skus)];
+            const totalOriginal = skus.length;
+            const totalUnique = uniqueSkus.length;
+
+            if (totalOriginal > totalUnique) {
+                alert(`您输入了 ${totalOriginal} 个SKU，其中包含重复项。将只处理 ${totalUnique} 个唯一的SKU。`);
+            }
+
+            // 过滤掉数据库中已存在的SKU
+            const newSkusToSubmit = uniqueSkus.filter(sku => !existingSkus.has(sku));
+            const skippedCount = totalUnique - newSkusToSubmit.length;
+
+            if (skippedCount > 0) {
+                alert(`${skippedCount} 个SKU因为已存在于跟踪列表中，将被跳过。`);
+            }
+
+            if (newSkusToSubmit.length === 0) {
+                alert('没有新的SKU需要添加。');
+                return;
+            }
+
+            // 显示加载指示
+            const saveBtn = document.getElementById('save-skus-btn');
+            saveBtn.disabled = true;
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在添加...';
+
+            let successCount = 0;
+            let failCount = 0;
+            let failedSkus = [];
+
+            for (const sku of newSkusToSubmit) {
+                try {
+                    const result = await apiRequest('/api/inventory/skus', 'POST', { sku });
+                    if (result) { // 假设API成功时返回真值
+                        successCount++;
+                    } else {
+                        failCount++;
+                        failedSkus.push(sku);
+                    }
+                } catch (error) {
+                    failCount++;
+                    failedSkus.push(sku);
+                    console.error(`添加 SKU ${sku} 失败:`, error);
+                }
+            }
+
+            // 恢复按钮状态
+            saveBtn.disabled = false;
+            saveBtn.innerHTML = '保存';
+
+            // 显示结果
+            let message = `处理完成！\n成功: ${successCount}个\n失败: ${failCount}个`;
+            if (failCount > 0) {
+                message += `\n失败的SKU: ${failedSkus.join(', ')}`;
+            }
+            alert(message);
+
+            // 清空文本域并关闭模态框
+            document.getElementById('sku-textarea').value = '';
+            const modal = bootstrap.Modal.getInstance(document.getElementById('addSkuModal'));
+            if (modal) {
+                modal.hide();
+            }
+            
+            // 刷新列表
+            await loadSkus();
+        });
     }
 
-    // 恢复按钮状态
-    saveBtn.disabled = false;
-    saveBtn.innerHTML = '保存';
+    const skuListBody = document.getElementById('sku-list-body');
+    if (skuListBody) {
+        skuListBody.addEventListener('click', async (e) => {
+            const target = e.target;
+            const tr = target.closest('tr');
+            if (!tr) return;
 
-    // 显示结果
-    let message = `处理完成！\n成功: ${successCount}个\n失败: ${failCount}个`;
-    if (failCount > 0) {
-        message += `\n失败的SKU: ${failedSkus.join(', ')}`;
+            const skuId = tr.dataset.skuId;
+
+            // Handle delete button click
+            if (target.classList.contains('delete-btn')) {
+                e.stopPropagation(); // Prevent row click event
+                const historyCheck = await apiRequest(`/api/inventory/skus/${skuId}/has-history`);
+                let confirmMessage = "确定要删除这个 SKU 吗？";
+                if (historyCheck && historyCheck.hasHistory) {
+                    confirmMessage = "警告：这个 SKU 存在历史库存数据，删除后将一并清除。确定要删除吗？";
+                }
+                if (confirm(confirmMessage)) {
+                    const result = await apiRequest(`/api/inventory/skus/${skuId}`, 'DELETE');
+                    if (result) {
+                        loadSkus(currentPage); // Reload current page
+                    }
+                }
+                return;
+            }
+
+            // Handle query button click
+            if (target.classList.contains('query-btn')) {
+                e.stopPropagation(); // Prevent row click event
+                querySku(skuId);
+                return;
+            }
+
+            // Handle analyze button click
+            if (target.classList.contains('analyze-btn')) {
+                e.stopPropagation(); // Prevent row click event
+                analyzeSku(skuId, target);
+                return;
+            }
+
+            // Handle row click to show chart and toggle alerts
+            if (skuId) {
+                // Prevent chart loading and alert toggling when clicking a button inside the row
+                if (target.tagName === 'BUTTON' || target.closest('button')) {
+                    return;
+                }
+
+                // Highlight logic
+                const isActive = tr.classList.contains('table-active');
+                document.querySelectorAll('#sku-list-body tr').forEach(row => row.classList.remove('table-active'));
+                if (!isActive) {
+                    tr.classList.add('table-active');
+                }
+
+                // Always load chart
+                loadHistoryForSku(skuId);
+
+                // Toggle alert row
+                const hasAlerts = alertsBySkuId[skuId] && alertsBySkuId[skuId].length > 0;
+                if (hasAlerts) {
+                    toggleAlertRow(skuId, tr);
+                }
+            }
+        });
     }
-    alert(message);
 
-    // 清空文本域并关闭模态框
-    document.getElementById('sku-textarea').value = '';
-    const modal = bootstrap.Modal.getInstance(document.getElementById('addSkuModal'));
-    if (modal) {
-        modal.hide();
-    }
-    
-    // 刷新列表
-    await loadSkus();
-});
-
-document.getElementById('sku-list-body').addEventListener('click', async (e) => {
-    const target = e.target;
-    const tr = target.closest('tr');
-    if (!tr) return;
-
-    const skuId = tr.dataset.skuId;
-
-    // Handle delete button click
-    if (target.classList.contains('delete-btn')) {
-        e.stopPropagation(); // Prevent row click event
-        const historyCheck = await apiRequest(`/api/inventory/skus/${skuId}/has-history`);
-        let confirmMessage = "确定要删除这个 SKU 吗？";
-        if (historyCheck && historyCheck.hasHistory) {
-            confirmMessage = "警告：这个 SKU 存在历史库存数据，删除后将一并清除。确定要删除吗？";
-        }
-        if (confirm(confirmMessage)) {
-            const result = await apiRequest(`/api/inventory/skus/${skuId}`, 'DELETE');
+    const fetchNowBtn = document.getElementById('fetch-now-btn');
+    if (fetchNowBtn) {
+        fetchNowBtn.addEventListener('click', async () => {
+            if (!confirm('立即查询会覆盖今天已有的最新数据，确定要执行吗？')) {
+                return;
+            }
+            const result = await apiRequest('/api/inventory/fetch-now', 'POST');
             if (result) {
-                loadSkus(currentPage); // Reload current page
+                let message = '查询完成！\n';
+                if (result.success && result.success.length > 0) {
+                    message += `成功: ${result.success.length}个\n`;
+                    result.success.forEach(item => {
+                        message += `- ${item.sku} (${item.name}): ${item.qty}\n`;
+                    });
+                }
+                if (result.failed && result.failed.length > 0) {
+                    message += `失败: ${result.failed.length}个 (${result.failed.join(', ')})\n`;
+                }
+                alert(message);
+                await loadSkus();
+                await loadScheduleHistory();
             }
-        }
-        return;
-    }
-
-    // Handle query button click
-    if (target.classList.contains('query-btn')) {
-        e.stopPropagation(); // Prevent row click event
-        querySku(skuId);
-        return;
-    }
-
-    // Handle analyze button click
-    if (target.classList.contains('analyze-btn')) {
-        e.stopPropagation(); // Prevent row click event
-        analyzeSku(skuId, target);
-        return;
-    }
-
-    // Handle row click to show chart and toggle alerts
-    if (skuId) {
-        // Prevent chart loading and alert toggling when clicking a button inside the row
-        if (target.tagName === 'BUTTON' || target.closest('button')) {
-            return;
-        }
-
-        // Highlight logic
-        const isActive = tr.classList.contains('table-active');
-        document.querySelectorAll('#sku-list-body tr').forEach(row => row.classList.remove('table-active'));
-        if (!isActive) {
-            tr.classList.add('table-active');
-        }
-
-        // Always load chart
-        loadHistoryForSku(skuId);
-
-        // Toggle alert row
-        const hasAlerts = alertsBySkuId[skuId] && alertsBySkuId[skuId].length > 0;
-        if (hasAlerts) {
-            toggleAlertRow(skuId, tr);
-        }
-    }
-});
-
-document.getElementById('fetch-now-btn').addEventListener('click', async () => {
-    if (!confirm('立即查询会覆盖今天已有的最新数据，确定要执行吗？')) {
-        return;
-    }
-    const result = await apiRequest('/api/inventory/fetch-now', 'POST');
-    if (result) {
-        let message = '查询完成！\n';
-        if (result.success && result.success.length > 0) {
-            message += `成功: ${result.success.length}个\n`;
-            result.success.forEach(item => {
-                message += `- ${item.sku} (${item.name}): ${item.qty}\n`;
-            });
-        }
-        if (result.failed && result.failed.length > 0) {
-            message += `失败: ${result.failed.length}个 (${result.failed.join(', ')})\n`;
-        }
-        alert(message);
-        await loadSkus();
-        await loadScheduleHistory();
+        });
     }
 });
 
@@ -272,40 +287,48 @@ async function loadSchedule() {
     }
 }
 
-document.getElementById('save-schedule-btn').addEventListener('click', async () => {
-    const cron = document.getElementById('cron-input').value.trim();
-    if (!cron) {
-        alert('请输入 Cron 表达式');
-        return;
-    }
-    // This assumes we are updating the first schedule found or creating a new one.
-    // This logic should be refined if multiple schedules are officially supported in the UI.
-    const schedules = await apiRequest('/api/schedules');
-    const scheduleData = {
-        name: 'Default Inventory Schedule',
-        cron: cron,
-        configId: 1, // Assuming a default configId, this should be made dynamic.
-        isActive: true
-    };
+document.addEventListener('DOMContentLoaded', function() {
+    const saveScheduleBtn = document.getElementById('save-schedule-btn');
+    if (saveScheduleBtn) {
+        saveScheduleBtn.addEventListener('click', async () => {
+            const cronInput = document.getElementById('cron-input');
+            if (!cronInput) return;
+            const cron = cronInput.value.trim();
+            if (!cron) {
+                alert('请输入 Cron 表达式');
+                return;
+            }
+            // This assumes we are updating the first schedule found or creating a new one.
+            // This logic should be refined if multiple schedules are officially supported in the UI.
+            const schedules = await apiRequest('/api/schedules');
+            const scheduleData = {
+                name: 'Default Inventory Schedule',
+                cron: cron,
+                configId: 1, // Assuming a default configId, this should be made dynamic.
+                isActive: true
+            };
 
-    try {
-        if (schedules && schedules.length > 0) {
-            // Update existing schedule
-            await apiRequest(`/api/schedules/${schedules[0].id}`, 'PUT', scheduleData);
-        } else {
-            // Create new schedule
-            await apiRequest('/api/schedules', 'POST', scheduleData);
-        }
-        alert('定时任务已保存');
-        loadSchedule();
-    } catch (error) {
-        alert('保存失败: ' + error.message);
+            try {
+                if (schedules && schedules.length > 0) {
+                    // Update existing schedule
+                    await apiRequest(`/api/schedules/${schedules[0].id}`, 'PUT', scheduleData);
+                } else {
+                    // Create new schedule
+                    await apiRequest('/api/schedules', 'POST', scheduleData);
+                }
+                alert('定时任务已保存');
+                loadSchedule();
+            } catch (error) {
+                alert('保存失败: ' + error.message);
+            }
+        });
     }
 });
 
 async function loadScheduleHistory() {
     const history = await apiRequest('/api/inventory/schedule/history');
     const scheduleHistoryList = document.getElementById('schedule-history-list');
+    if (!scheduleHistoryList) return;
     scheduleHistoryList.innerHTML = '';
     if (history && history.length > 0) {
         history.forEach(item => {
