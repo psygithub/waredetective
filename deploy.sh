@@ -16,8 +16,8 @@
 # =============================================================================
 
 # --- 在这里配置您的变量 ---
-CONTAINER_NAME="warehouse-detective-container"
-IMAGE_NAME="warehouse-detective"
+CONTAINER_NAME="warehouse-container"
+IMAGE_NAME="warehouse"
 # -------------------------
 
 # set -e 的作用是：如果任何命令执行失败（返回非零退出码），
@@ -47,13 +47,16 @@ docker build -t "$IMAGE_NAME" .
 
 # --- 步骤 4: 运行新的 Docker 容器 ---
 echo "--- [步骤 4/5] 正在启动新的容器 ($CONTAINER_NAME)... ---"
+# 获取脚本所在的真实目录，确保挂载路径的正确性，无论从哪里执行脚本
+SCRIPT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &> /dev/null && pwd)
+
 docker run -d \
-  --network app-network \
+  --network my-proxy-network \
   --restart unless-stopped \
   -p 3000:3000 \
-  -v /app/waredetective/data:/app/data \
-  -v /app/waredetective/output:/app/output \
-  -v /app/waredetective/config:/app/config \
+  -v "$SCRIPT_DIR/data:/app/data" \
+  -v "$SCRIPT_DIR/output:/app/output" \
+  -v "$SCRIPT_DIR/config:/app/config" \
   --name "$CONTAINER_NAME" \
   "$IMAGE_NAME"
 
