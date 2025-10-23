@@ -116,7 +116,10 @@ function displayAlerts(alerts) {
             case 1: rowClass = 'table-info'; break;
         }
 
-        const consumptionDetail = `(${details.days}天内消耗 ${details.qtyChange}件, 日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%)`;
+        const consumptionRateText = typeof details.consumptionRate === 'number' ? `${(details.consumptionRate * 100).toFixed(2)}%` : 'N/A';
+        const dailyConsumptionText = typeof details.dailyConsumption === 'number' ? details.dailyConsumption.toFixed(4) : 'N/A';
+
+        const consumptionDetail = `(${details.days}天内消耗 ${details.qtyChange}件, 日均消耗率: ${consumptionRateText})`;
         const alertId = `alert-${index}`;
 
         // 主行
@@ -147,8 +150,8 @@ function displayAlerts(alerts) {
                         <div class="col-md-6">
                             <strong>预警判断:</strong>
                             <ul>
-                                <li>日均消耗量: ${details.dailyConsumption.toFixed(4)}</li>
-                                <li>日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%</li>
+                                <li>日均消耗量: ${dailyConsumptionText}</li>
+                                <li>日均消耗率: ${consumptionRateText}</li>
                                 <li>预警级别: ${alert.alert_level}</li>
                             </ul>
                         </div>
