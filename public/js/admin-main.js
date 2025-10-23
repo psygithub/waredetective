@@ -6,6 +6,11 @@ const loadedScripts = {}; // 用于缓存已加载的脚本
 
 // 页面加载时初始化
 document.addEventListener('DOMContentLoaded', function () {
+    // 将 utils.js 中的函数挂载到 window 对象，以便动态加载的模块可以访问
+    if (typeof renderPagination === 'function') {
+        window.renderPagination = renderPagination;
+    }
+
     // 检查登录状态
     token = localStorage.getItem('token');
     const userStr = localStorage.getItem('user');
@@ -195,42 +200,6 @@ function loadAndExecuteScript(src) {
     });
 }
 
-// API请求封装
-async function apiRequest(url, method = 'GET', data = null) {
-    const baseUrl = window.location.origin;
-    const fullUrl = new URL(url, baseUrl).href;
-
-    const options = {
-        method,
-        headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        }
-    };
-
-    if (data) {
-        options.body = JSON.stringify(data);
-    }
-
-    const response = await fetch(fullUrl, options);
-
-    if (response.status === 401) {
-        // 捕获到401错误，立即登出
-        console.log('API请求认证失败，将自动登出。');
-        logout();
-        // 抛出一个错误以中断当前的Promise链
-        throw new Error('会话已失效');
-    }
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || '请求失败');
-    }
-
-    // 检查响应是否为空
-    const text = await response.text();
-    return text ? JSON.parse(text) : {};
-}
 
 // 退出登录
 function logout() {

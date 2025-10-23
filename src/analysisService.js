@@ -68,8 +68,8 @@ async function runInventoryAnalysis(trackedSkuId = null) {
                         dailyConsumption,
                         qtyChange,
                         days,
-                        startQty: firstRecord.qty,
-                        endQty: lastRecord.qty,
+                        start_qty: firstRecord.qty,
+                        end_qty: lastRecord.qty,
                     };
                     db.createAlert({
                         tracked_sku_id: sku.id,

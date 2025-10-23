@@ -34,6 +34,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
     <script src="/libs/chart.umd.min.js"></script>
     <script src="/libs/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script src="/js/utils.js"></script>
     <script>
         let currentUser = null;
         let token = null;
@@ -111,30 +112,6 @@
             }
         }
         
-        async function apiRequest(url, method = 'GET', data = null) {
-            const options = {
-                method,
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json'
-                }
-            };
-            if (data) {
-                options.body = JSON.stringify(data);
-            }
-            const response = await fetch(url, options);
-            if (response.status === 401) {
-                console.log('API请求认证失败，将自动登出。');
-                logout();
-                throw new Error('会话已失效');
-            }
-            if (!response.ok) {
-                const error = await response.json();
-                throw new Error(error.error || '请求失败');
-            }
-            const text = await response.text();
-            return text ? JSON.parse(text) : {};
-        }
 
         function logout() {
             stopSessionCheck(); // 停止会话检查

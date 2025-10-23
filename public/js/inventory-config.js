@@ -21,6 +21,66 @@ window.sectionInitializers['inventory-config'] = async () => {
     await loadSkus();
     await loadSchedule();
     await loadScheduleHistory();
+
+    // Attach event listener after the section is initialized and DOM is ready
+    const skuListBody = document.getElementById('sku-list-body');
+    if (skuListBody) {
+        skuListBody.addEventListener('click', async (e) => {
+            const target = e.target;
+            // Use closest on the target to find the parent tr, as the tr itself might not be the direct target
+            const tr = target.closest('.sku-row');
+            if (!tr) return;
+
+            const skuId = tr.dataset.skuId;
+
+            // Handle button clicks within the row
+            if (target.tagName === 'BUTTON' || target.closest('button')) {
+                e.stopPropagation();
+                const button = target.closest('button');
+                const id = button.dataset.id;
+                if (button.classList.contains('delete-btn')) {
+                    const historyCheck = await apiRequest(`/api/inventory/skus/${id}/has-history`);
+                    let confirmMessage = "确定要删除这个 SKU 吗？";
+                    if (historyCheck && historyCheck.hasHistory) {
+                        confirmMessage = "警告：这个 SKU 存在历史库存数据，删除后将一并清除。确定要删除吗？";
+                    }
+                    if (confirm(confirmMessage)) {
+                        const result = await apiRequest(`/api/inventory/skus/${id}`, 'DELETE');
+                        if (result) {
+                            loadSkus(currentPage);
+                        }
+                    }
+                } else if (button.classList.contains('query-btn')) {
+                    querySku(id);
+                } else if (button.classList.contains('analyze-btn')) {
+                    analyzeSku(id, button);
+                }
+                return; // Stop further processing for button clicks
+            }
+
+            // Handle row click for non-button elements
+            if (skuId) {
+                // Highlight logic
+                document.querySelectorAll('#sku-list-body .sku-row').forEach(row => row.classList.remove('table-active'));
+                tr.classList.add('table-active');
+
+                // Load chart
+                loadHistoryForSku(skuId);
+
+                // Toggle alert detail row
+                const detailRow = document.querySelector(`.sku-details-row[data-sku-id="${skuId}"]`);
+                if (detailRow) {
+                    const isHidden = detailRow.classList.contains('d-none');
+                    // Close all other detail rows
+                    document.querySelectorAll('.sku-details-row').forEach(row => row.classList.add('d-none'));
+                    // Toggle the current one
+                    if (isHidden) {
+                        detailRow.classList.remove('d-none');
+                    }
+                }
+            }
+        });
+    }
 };
 
 var currentPage = 1;
@@ -33,7 +93,7 @@ async function loadSkus(page = 1) {
     if (response && response.items) {
         existingSkus = new Set(response.items.map(s => s.sku));
         renderSkuList(response.items);
-        renderPagination(response.total, page, rowsPerPage);
+        window.renderPagination('pagination-links', response.total, page, rowsPerPage, 'loadSkus');
         if (response.items.length > 0) {
             // Automatically load chart for the first SKU in the list
             loadHistoryForSku(response.items[0].id);
@@ -51,14 +111,6 @@ async function loadSkus(page = 1) {
     }
 }
 
-function getBadgeForLevel(level) {
-    switch (level) {
-        case 3: return '<span class="badge rounded-pill bg-danger ms-2">高危</span>';
-        case 2: return '<span class="badge rounded-pill bg-warning ms-2">中危</span>';
-        case 1: return '<span class="badge rounded-pill bg-info ms-2">低危</span>';
-        default: return '';
-    }
-}
 
 function renderSkuList(skus) {
     const skuListBody = document.getElementById('sku-list-body');
@@ -68,11 +120,9 @@ function renderSkuList(skus) {
         skuListBody.innerHTML = '<tr><td colspan="6" class="text-center">暂无跟踪的 SKU。</td></tr>';
         return;
     }
+
+    let html = '';
     skus.forEach(sku => {
-        const tr = document.createElement('tr');
-        tr.style.cursor = 'pointer';
-        tr.dataset.skuId = sku.id;
-        
         const alerts = alertsBySkuId[sku.id];
         let highestAlertLevel = 0;
         if (alerts && alerts.length > 0) {
@@ -80,23 +130,52 @@ function renderSkuList(skus) {
         }
 
         const recordTime = sku.latest_record_time ? new Date(sku.latest_record_time).toLocaleString() : 'N/A';
-        tr.innerHTML = `
-            <td><img src="${sku.product_image || 'https://via.placeholder.com/50'}" alt="${sku.sku}" width="50" height="50"></td>
-            <td>${sku.sku} ${getBadgeForLevel(highestAlertLevel)}</td>
-            <td>${sku.latest_qty ?? 'NA'}</td>
-            <td>${sku.latest_month_sale ?? 'N/A'}</td>
-            <td>${recordTime}</td>
-            <td>
-                <button class="btn btn-info btn-sm query-btn" data-id="${sku.id}">查询</button>
-                <button class="btn btn-warning btn-sm analyze-btn" data-id="${sku.id}">分析</button>
-                <button class="btn btn-danger btn-sm delete-btn" data-id="${sku.id}">删除</button>
-            </td>
+        
+        // 主行
+        html += `
+            <tr class="sku-row" data-sku-id="${sku.id}" style="cursor: pointer;">
+                <td><img src="${sku.product_image || 'https://via.placeholder.com/50'}" alt="${sku.sku}" width="50" height="50"></td>
+                <td>${sku.sku} ${getBadgeForLevel(highestAlertLevel)}</td>
+                <td>${sku.latest_qty ?? 'NA'}</td>
+                <td>${sku.latest_month_sale ?? 'N/A'}</td>
+                <td>${recordTime}</td>
+                <td>
+                    <button class="btn btn-info btn-sm query-btn" data-id="${sku.id}">查询</button>
+                    <button class="btn btn-warning btn-sm analyze-btn" data-id="${sku.id}">分析</button>
+                    <button class="btn btn-danger btn-sm delete-btn" data-id="${sku.id}">删除</button>
+                </td>
+            </tr>
         `;
-        skuListBody.appendChild(tr);
+
+        // 如果有预警，则添加隐藏的详情行
+        if (alerts && alerts.length > 0) {
+            const alertContent = alerts.sort((a, b) => b.alert_level - a.alert_level).map(alert => {
+                const details = JSON.parse(alert.details);
+                return `<div class="alert alert-secondary mb-1 p-2">
+                            ${getBadgeForLevel(alert.alert_level)} <strong>${alert.region_name}:</strong> 
+                            (${details.days}天内消耗 ${details.qtyChange}件, 
+                            日均消耗率: ${(details.consumptionRate * 100).toFixed(2)}%)
+                        </div>`;
+            }).join('');
+
+            html += `
+                <tr class="sku-details-row d-none" data-sku-id="${sku.id}">
+                    <td colspan="6" class="bg-light p-3">
+                        <h6 class="alert-heading">预警详情</h6>
+                        ${alertContent}
+                    </td>
+                </tr>
+            `;
+        }
     });
+    skuListBody.innerHTML = html;
 }
 
+// Note: The original DOMContentLoaded listener that handled skuListBody clicks has been moved into the section initializer.
+// Event listeners for modals and other static elements can remain here.
+
 document.addEventListener('DOMContentLoaded', function() {
+    // This listener is now specifically for the modal button, which is always in the DOM.
     const saveSkusBtn = document.getElementById('save-skus-btn');
     if (saveSkusBtn) {
         saveSkusBtn.addEventListener('click', async () => {
@@ -112,21 +191,11 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // 在发送API请求前去重
             const uniqueSkus = [...new Set(skus)];
-            const totalOriginal = skus.length;
-            const totalUnique = uniqueSkus.length;
-
-            if (totalOriginal > totalUnique) {
-                alert(`您输入了 ${totalOriginal} 个SKU，其中包含重复项。将只处理 ${totalUnique} 个唯一的SKU。`);
-            }
-
-            // 过滤掉数据库中已存在的SKU
             const newSkusToSubmit = uniqueSkus.filter(sku => !existingSkus.has(sku));
-            const skippedCount = totalUnique - newSkusToSubmit.length;
-
-            if (skippedCount > 0) {
-                alert(`${skippedCount} 个SKU因为已存在于跟踪列表中，将被跳过。`);
+            
+            if (uniqueSkus.length > newSkusToSubmit.length) {
+                alert(`部分SKU已存在，将被跳过。`);
             }
 
             if (newSkusToSubmit.length === 0) {
@@ -134,116 +203,24 @@ document.addEventListener('DOMContentLoaded', function() {
                 return;
             }
 
-            // 显示加载指示
             const saveBtn = document.getElementById('save-skus-btn');
             saveBtn.disabled = true;
-            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> 正在添加...';
+            saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> 正在添加...';
 
-            let successCount = 0;
-            let failCount = 0;
-            let failedSkus = [];
-
-            for (const sku of newSkusToSubmit) {
-                try {
-                    const result = await apiRequest('/api/inventory/skus', 'POST', { sku });
-                    if (result) { // 假设API成功时返回真值
-                        successCount++;
-                    } else {
-                        failCount++;
-                        failedSkus.push(sku);
-                    }
-                } catch (error) {
-                    failCount++;
-                    failedSkus.push(sku);
-                    console.error(`添加 SKU ${sku} 失败:`, error);
+            try {
+                await apiRequest('/api/inventory/skus/batch', 'POST', { skus: newSkusToSubmit });
+                alert(`${newSkusToSubmit.length} 个新 SKU 添加成功!`);
+            } catch (error) {
+                alert(`添加失败: ${error.message}`);
+            } finally {
+                saveBtn.disabled = false;
+                saveBtn.innerHTML = '保存';
+                document.getElementById('sku-textarea').value = '';
+                const modal = bootstrap.Modal.getInstance(document.getElementById('addSkuModal'));
+                if (modal) {
+                    modal.hide();
                 }
-            }
-
-            // 恢复按钮状态
-            saveBtn.disabled = false;
-            saveBtn.innerHTML = '保存';
-
-            // 显示结果
-            let message = `处理完成！\n成功: ${successCount}个\n失败: ${failCount}个`;
-            if (failCount > 0) {
-                message += `\n失败的SKU: ${failedSkus.join(', ')}`;
-            }
-            alert(message);
-
-            // 清空文本域并关闭模态框
-            document.getElementById('sku-textarea').value = '';
-            const modal = bootstrap.Modal.getInstance(document.getElementById('addSkuModal'));
-            if (modal) {
-                modal.hide();
-            }
-            
-            // 刷新列表
-            await loadSkus();
-        });
-    }
-
-    const skuListBody = document.getElementById('sku-list-body');
-    if (skuListBody) {
-        skuListBody.addEventListener('click', async (e) => {
-            const target = e.target;
-            const tr = target.closest('tr');
-            if (!tr) return;
-
-            const skuId = tr.dataset.skuId;
-
-            // Handle delete button click
-            if (target.classList.contains('delete-btn')) {
-                e.stopPropagation(); // Prevent row click event
-                const historyCheck = await apiRequest(`/api/inventory/skus/${skuId}/has-history`);
-                let confirmMessage = "确定要删除这个 SKU 吗？";
-                if (historyCheck && historyCheck.hasHistory) {
-                    confirmMessage = "警告：这个 SKU 存在历史库存数据，删除后将一并清除。确定要删除吗？";
-                }
-                if (confirm(confirmMessage)) {
-                    const result = await apiRequest(`/api/inventory/skus/${skuId}`, 'DELETE');
-                    if (result) {
-                        loadSkus(currentPage); // Reload current page
-                    }
-                }
-                return;
-            }
-
-            // Handle query button click
-            if (target.classList.contains('query-btn')) {
-                e.stopPropagation(); // Prevent row click event
-                querySku(skuId);
-                return;
-            }
-
-            // Handle analyze button click
-            if (target.classList.contains('analyze-btn')) {
-                e.stopPropagation(); // Prevent row click event
-                analyzeSku(skuId, target);
-                return;
-            }
-
-            // Handle row click to show chart and toggle alerts
-            if (skuId) {
-                // Prevent chart loading and alert toggling when clicking a button inside the row
-                if (target.tagName === 'BUTTON' || target.closest('button')) {
-                    return;
-                }
-
-                // Highlight logic
-                const isActive = tr.classList.contains('table-active');
-                document.querySelectorAll('#sku-list-body tr').forEach(row => row.classList.remove('table-active'));
-                if (!isActive) {
-                    tr.classList.add('table-active');
-                }
-
-                // Always load chart
-                loadHistoryForSku(skuId);
-
-                // Toggle alert row
-                const hasAlerts = alertsBySkuId[skuId] && alertsBySkuId[skuId].length > 0;
-                if (hasAlerts) {
-                    toggleAlertRow(skuId, tr);
-                }
+                await loadSkus(); // Refresh the list
             }
         });
     }
@@ -254,21 +231,13 @@ document.addEventListener('DOMContentLoaded', function() {
             if (!confirm('立即查询会覆盖今天已有的最新数据，确定要执行吗？')) {
                 return;
             }
-            const result = await apiRequest('/api/inventory/fetch-now', 'POST');
-            if (result) {
-                let message = '查询完成！\n';
-                if (result.success && result.success.length > 0) {
-                    message += `成功: ${result.success.length}个\n`;
-                    result.success.forEach(item => {
-                        message += `- ${item.sku} (${item.name}): ${item.qty}\n`;
-                    });
-                }
-                if (result.failed && result.failed.length > 0) {
-                    message += `失败: ${result.failed.length}个 (${result.failed.join(', ')})\n`;
-                }
-                alert(message);
+            try {
+                const result = await apiRequest('/api/inventory/fetch-now', 'POST');
+                alert(result.message || '查询任务已启动');
                 await loadSkus();
                 await loadScheduleHistory();
+            } catch (error) {
+                alert(`查询失败: ${error.message}`);
             }
         });
     }
@@ -379,49 +348,6 @@ async function analyzeSku(skuId, button) {
     }
 }
 
-function toggleAlertRow(skuId, parentTr) {
-    const nextTr = parentTr.nextElementSibling;
-    
-    // Close any other open alert rows first
-    const otherOpenRows = document.querySelectorAll('.alert-detail-row');
-    otherOpenRows.forEach(row => {
-        if (row !== nextTr) {
-            row.remove();
-        }
-    });
-
-    // Check if the next row is the one we are trying to toggle
-    if (nextTr && nextTr.classList.contains('alert-detail-row') && nextTr.dataset.parentSkuId === skuId) {
-        // It's our row and it's open, so close it
-        nextTr.remove();
-    } else {
-        // It's either no row or another sku's row, so open ours
-        const alertsForSku = alertsBySkuId[skuId];
-        if (alertsForSku && alertsForSku.length > 0) {
-            const detailTr = document.createElement('tr');
-            detailTr.classList.add('alert-detail-row');
-            detailTr.dataset.parentSkuId = skuId;
-            
-            const detailTd = document.createElement('td');
-            detailTd.colSpan = "6"; // Span all columns
-            
-            const alertContent = alertsForSku.sort((a, b) => b.alert_level - a.alert_level).map(alert => {
-                const details = JSON.parse(alert.details);
-                return `<p class="mb-1">${getBadgeForLevel(alert.alert_level)} <strong>${alert.region_name}:</strong> 库存消耗过快！在 ${details.days} 天内消耗了 ${details.qtyChange} 件 (从 ${details.startQty} 到 ${details.endQty})。</p>`;
-            }).join('');
-
-            detailTd.innerHTML = `
-                <div class="alert alert-light mb-0">
-                    <h6 class="alert-heading">预警详情</h6>
-                    ${alertContent}
-                </div>
-            `;
-            
-            detailTr.appendChild(detailTd);
-            parentTr.after(detailTr);
-        }
-    }
-}
 
 async function querySku(skuId) {
     try {
@@ -435,57 +361,6 @@ async function querySku(skuId) {
     }
 }
 
-function renderPagination(totalItems, currentPage, rowsPerPage) {
-    const paginationContainer = document.getElementById('pagination-controls');
-    if (!paginationContainer) return;
-
-    // Create a dedicated container for links if it doesn't exist, to not overwrite the dropdown
-    let linksContainer = document.getElementById('pagination-links');
-    if (!linksContainer) {
-        linksContainer = document.createElement('div');
-        linksContainer.id = 'pagination-links';
-        paginationContainer.appendChild(linksContainer);
-    }
-
-    const totalPages = Math.ceil(totalItems / rowsPerPage);
-    linksContainer.innerHTML = '';
-
-    if (totalPages <= 1) return;
-
-    const prevDisabled = currentPage === 1 ? 'disabled' : '';
-    const nextDisabled = currentPage === totalPages ? 'disabled' : '';
-
-    let paginationHTML = `<ul class="pagination mb-0">`; // mb-0 to align with dropdown
-    paginationHTML += `<li class="page-item ${prevDisabled}"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${currentPage - 1})">上一页</a></li>`;
-
-    // Simplified pagination links logic
-    let startPage = Math.max(1, currentPage - 2);
-    let endPage = Math.min(totalPages, currentPage + 2);
-
-    if (startPage > 1) {
-        paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(1)">1</a></li>`;
-        if (startPage > 2) {
-            paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        }
-    }
-
-    for (let i = startPage; i <= endPage; i++) {
-        const activeClass = i === currentPage ? 'active' : '';
-        paginationHTML += `<li class="page-item ${activeClass}"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${i})">${i}</a></li>`;
-    }
-
-    if (endPage < totalPages) {
-        if (endPage < totalPages - 1) {
-            paginationHTML += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
-        }
-        paginationHTML += `<li class="page-item"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${totalPages})">${totalPages}</a></li>`;
-    }
-
-    paginationHTML += `<li class="page-item ${nextDisabled}"><a class="page-link" href="#" onclick="event.preventDefault(); loadSkus(${currentPage + 1})">下一页</a></li>`;
-    paginationHTML += `</ul>`;
-
-    linksContainer.innerHTML = paginationHTML;
-}
 
 // --- Chart Functions Migrated from inventory-history.js ---
 
